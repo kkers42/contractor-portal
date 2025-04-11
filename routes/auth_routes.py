@@ -3,6 +3,7 @@ from fastapi.security import OAuth2PasswordRequestForm
 from db import execute_query, fetch_query
 from routes.auth import hash_password, verify_password, create_access_token, decode_access_token
 from pydantic import BaseModel
+from routes.auth import get_current_user
 
 router = APIRouter()
 
