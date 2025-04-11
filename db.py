@@ -43,3 +43,15 @@ def execute_query(query, params=None):
     conn.commit()
     cursor.close()
     conn.close()
+
+def insert_location(user_id, property_id, time_in, time_out, notes=None):
+    query = """
+        INSERT INTO location_logs (user_id, property_id, time_in, time_out, notes)
+        VALUES (%s, %s, %s, %s, %s)
+    """
+    params = (user_id, property_id, time_in, time_out, notes)
+    try:
+        execute_query(query, params)
+        print(f"✅ Location log inserted: user_id={user_id}, property_id={property_id}")
+    except Error as e:
+        print(f"❌ Insert location error: {e}")
