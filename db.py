@@ -35,3 +35,11 @@ def fetch_query(query, params=None):
     except mysql.connector.Error as e:
         print(f"❌ Fetch query error: {e}")
         return None
+
+def execute_query(query, params=None):
+    conn = connect_to_db()
+    cursor = conn.cursor()
+    cursor.execute(query, params)
+    conn.commit()
+    cursor.close()
+    conn.close()
