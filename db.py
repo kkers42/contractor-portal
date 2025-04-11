@@ -37,7 +37,7 @@ def fetch_query(query, params=None):
         return None
 
 def execute_query(query, params=None):
-    conn = connect_to_db()
+    conn = get_connection()
     cursor = conn.cursor()
     cursor.execute(query, params)
     conn.commit()
