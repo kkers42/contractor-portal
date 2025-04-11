@@ -1,0 +1,106 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Signup</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #80ff80;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+        }
+
+        h2 {
+            color: #80ff80;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 5px;
+        }
+
+        form {
+            max-width: 400px;
+            margin: auto;
+            border: 1px solid #80ff80;
+            padding: 20px;
+            background-color: #000;
+        }
+
+        input, select, button {
+            width: 100%;
+            padding: 10px;
+            margin: 8px 0;
+            box-sizing: border-box;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            font-family: 'Courier New', monospace;
+        }
+
+        button {
+            cursor: pointer;
+        }
+
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+
+        .message {
+            text-align: center;
+            margin-top: 10px;
+            font-weight: bold;
+        }
+
+        a {
+            color: #80ff80;
+            text-decoration: underline;
+        }
+
+        a:hover {
+            color: #00cc00;
+        }
+    </style>
+</head>
+	<body>
+		<h2>Signup</h2>
+		<form id="signupForm">
+		<input type="text" name="name" id="name" placeholder="Full Name" required>
+		<input type="email" name="email" id="email" placeholder="Email" required>
+		<input type="tel" name="phone" id="phone" placeholder="Phone Number" required>
+		<input type="password" name="password" id="password" placeholder="Password" required>
+		<select name="role" id="role" required>
+			<option value="">Select Role</option>
+			<option value="Manager">Manager</option>
+			<option value="User">User</option>
+		</select>
+		<button type="submit">Signup</button>
+		<div class="message" id="signupMessage"></div>
+	</form>	
+
+    <p style="text-align:center;">Already have an account? <a href="/static/login.html">Login</a></p>
+
+    <script>
+        document.getElementById('signupForm').addEventListener('submit', async function(event) {
+    event.preventDefault();
+
+    const form = document.getElementById('signupForm');
+    const formData = new FormData(form);
+
+    const response = await fetch(`${API_BASE_URL}/signup-request/`, {
+        method: 'POST',
+        body: formData
+    });
+
+    const result = await response.json();
+    const messageEl = document.getElementById('signupMessage');
+
+    if (response.ok) {
+        messageEl.innerText = '✅ Signup request submitted!';
+    } else {
+        messageEl.innerText = `❌ ${result.detail || 'Signup failed'}`;
+    }
+});
+
+    </script>
+</body>
+</html>

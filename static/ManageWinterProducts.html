@@ -1,0 +1,174 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Manage Winter Products</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #80ff80;
+        }
+        h2 {
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 5px;
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+            background: #000;
+            color: #80ff80;
+        }
+        th, td {
+            border: 1px solid #80ff80;
+            padding: 10px;
+            text-align: left;
+        }
+        th {
+            background-color: #111;
+        }
+        input, button {
+            padding: 10px;
+            margin-top: 10px;
+            width: 100%;
+            box-sizing: border-box;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+        }
+        input::placeholder {
+            color: #80ff80;
+            opacity: 0.6;
+        }
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+        #message {
+            color: #80ff80;
+            margin-top: 10px;
+        }
+    </style>
+</head>
+<body onload="checkAccess(['Admin', 'Manager']); fetchProducts();">
+
+<h2>Manage Winter Products</h2>
+
+<input type="text" id="name" placeholder="Product Name">
+<input type="text" id="unit" placeholder="Unit (e.g., lbs, bags)">
+<button onclick="addProduct()">Add Product</button>
+<p id="message"></p>
+
+<table id="productsTable">
+    <thead>
+        <tr><th>Name</th><th>Unit</th><th>Actions</th></tr>
+    </thead>
+    <tbody></tbody>
+</table>
+
+<button onclick="logout()">Logout</button>
+
+<script>
+function logout() {
+    localStorage.removeItem("token");
+    window.location.href = "/static/login.html";
+}
+
+function checkAccess(allowedRoles) {
+    const token = localStorage.getItem("token");
+    if (!token) {
+        window.location.href = "/static/login.html";
+        return;
+    }
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const role = payload.role;
+    if (!allowedRoles.includes(role)) {
+        alert("Access denied.");
+        window.location.href = "/static/login.html";
+    }
+}
+
+async function fetchProducts() {
+    const res = await fetch(`${API_BASE_URL}/winter-products/`);
+    const products = await res.json();
+    const tbody = document.querySelector("#productsTable tbody");
+    tbody.innerHTML = "";
+    products.forEach(p => {
+        const row = `
+            <tr>
+                <td>${p.name}</td>
+                <td>${p.unit}</td>
+                <td>
+                    <button onclick="editProduct(${p.id}, '${p.name}', '${p.unit}')">Edit</button>
+                    <button onclick="deleteProduct(${p.id})">Delete</button>
+                </td>
+            </tr>`;
+        tbody.innerHTML += row;
+    });
+}
+
+async function addProduct() {
+    const name = document.getElementById("name").value;
+    const unit = document.getElementById("unit").value;
+    const formData = new FormData();
+    formData.append("name", name);
+    formData.append("unit", unit);
+
+    const res = await fetch(`${API_BASE_URL}/winter-products/`, {
+        method: "POST",
+        body: formData
+    });
+
+    if (res.ok) {
+        document.getElementById("message").innerText = "✅ Product added!";
+        document.getElementById("name").value = "";
+        document.getElementById("unit").value = "";
+        fetchProducts();
+    } else {
+        document.getElementById("message").innerText = "❌ Failed to add product.";
+    }
+}
+
+function editProduct(id, name, unit) {
+    const newName = prompt("Edit product name:", name);
+    const newUnit = prompt("Edit unit:", unit);
+    if (!newName || !newUnit) return;
+
+    const formData = new FormData();
+    formData.append("name", newName);
+    formData.append("unit", newUnit);
+
+    fetch(`${API_BASE_URL}/winter-products/${id}`, {
+        method: "PUT",
+        body: formData
+    }).then(res => {
+        if (res.ok) {
+            document.getElementById("message").innerText = "✅ Product updated!";
+            fetchProducts();
+        } else {
+            document.getElementById("message").innerText = "❌ Failed to update product.";
+        }
+    });
+}
+
+function deleteProduct(id) {
+    if (!confirm("Are you sure you want to delete this product?")) return;
+
+    fetch(`${API_BASE_URL}/winter-products/${id}`, {
+        method: "DELETE"
+    }).then(res => {
+        if (res.ok) {
+            document.getElementById("message").innerText = "✅ Product deleted!";
+            fetchProducts();
+        } else {
+            document.getElementById("message").innerText = "❌ Failed to delete product.";
+        }
+    });
+}
+</script>
+
+</body>
+</html>
