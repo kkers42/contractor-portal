@@ -59,19 +59,19 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
     email = form_data.username
     password = form_data.password
 
-    **print(f"🔍 Attempting login for: {email}")**
+    print(f"🔍 Attempting login for: {email}")
 
     user = fetch_query("SELECT * FROM users WHERE email = %s", (email,))
     
-    **print(f"📦 Fetched user: {user}")**
+    print(f"📦 Fetched user: {user}")
 
     if not user or not verify_password(password, user[0]['password']):
-        **print(f"❌ Login failed: bad password or no user")**
+        print(f"❌ Login failed: bad password or no user")
         raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
 
     access_token = create_access_token(data={"sub": user[0]['email'], "role": user[0]['role']})
     
-    **print(f"✅ Login success. Token generated for: {user[0]['email']}")**
+    print(f"✅ Login success. Token generated for: {user[0]['email']}")
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/admin/create-user/")
