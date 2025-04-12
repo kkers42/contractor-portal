@@ -57,7 +57,7 @@
 <body>
     <div class="login-container">
         <h2>Login</h2>
-        <input type="text" id="username" placeholder="Username">
+        <input type="text" id="email" placeholder="Email">
         <input type="password" id="password" placeholder="Password">
         <button onclick="login()">Login</button>
         <div id="error-message" style="color: red; margin-top: 10px;"></div>
@@ -65,7 +65,7 @@
 
     <script>
         async function login() {
-            const username = document.getElementById('username').value;
+            const username = document.getElementById('email').value; // keep ID = email
             const password = document.getElementById('password').value;
             const errorDisplay = document.getElementById('error-message');
             errorDisplay.textContent = "";
