@@ -9,8 +9,8 @@ if (typeof window.CONFIG_LOADED === 'undefined') {
   const isLocalhost = FORCE_LOCAL || window.location.hostname === "localhost" || window.location.hostname.startsWith("127.");
 
   const API_BASE_URL = isLocalhost
-    ? "http://127.0.0.1:8000"
-    : "https://contractor-portal-1074698584693.us-central1.run.app";
+  ? "http://127.0.0.1:8000"
+  : "https://contractor-portal-410182375480.us-central1.run.app";
 
   window.API_BASE_URL = API_BASE_URL;
 
