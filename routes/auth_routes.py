@@ -61,17 +61,25 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     print(f"🔍 Attempting login for: {email}")
 
-    user = fetch_query("SELECT * FROM users WHERE email = %s", (email,))
-    
-    print(f"📦 Fetched user: {user}")
+    try:
+        user = fetch_query("SELECT * FROM users WHERE email = %s", (email,))
+        print(f"📦 Fetched user: {user}")
+    except Exception as e:
+        print(f"❌ Database connection error: {e}")
+        raise HTTPException(status_code=500, detail="Database connection error")
 
-    if not user or not verify_password(password, user[0]['password']):
-        print(f"❌ Login failed: bad password or no user")
-        raise HTTPException(status_code=status.HTTP_401_UNAUTHORIZED, detail="Invalid credentials")
+    if not user:
+        print("❌ Login failed: no user found")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token = create_access_token(data={"sub": user[0]['email'], "role": user[0]['role']})
-    
-    print(f"✅ Login success. Token generated for: {user[0]['email']}")
+    user = user[0]  # First row
+    if not verify_password(password, user['password']):
+        print("❌ Login failed: bad password")
+        raise HTTPException(status_code=401, detail="Invalid credentials")
+
+    access_token = create_access_token(data={"sub": user["email"], "role": user["role"]})
+    print(f"✅ Login success. Token generated for: {user['email']}")
+
     return {"access_token": access_token, "token_type": "bearer"}
 
 @router.post("/admin/create-user/")
