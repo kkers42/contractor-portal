@@ -14,8 +14,14 @@ oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 def hash_password(password: str) -> str:
     return bcrypt.hash(password)
 
-def verify_password(plain_password: str, hashed_password: str) -> bool:
-    return bcrypt.verify(plain_password, hashed_password)
+def verify_password(plain_password, hashed_password):
+    try:
+        result = bcrypt.verify(plain_password, hashed_password)
+        print(f"✅ Password verification result: {result}")
+        return result
+    except Exception as e:
+        print(f"❌ Error verifying password: {e}")
+        return False
 
 def create_access_token(data: dict, expires_delta: timedelta = None):
     to_encode = data.copy()
