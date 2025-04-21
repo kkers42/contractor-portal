@@ -1,9 +1,8 @@
 import mysql.connector
 from mysql.connector import Error
 import os
-
-# ✅ REMOVE: from dotenv import load_dotenv
-# ✅ REMOVE: load_dotenv()
+#from dotenv import load_dotenv # Comment out for server
+#load_dotenv() # Comment out for server
 
 DB_CONFIG = {
     "host": os.environ.get("DB_HOST"),
@@ -13,6 +12,8 @@ DB_CONFIG = {
 }
 
 print("🚀 DB Config:", DB_CONFIG)
+print("🚀 DB_HOST ENV:", os.getenv("DB_HOST"))
+
 
 def get_connection():
     try:
