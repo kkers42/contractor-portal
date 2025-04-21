@@ -17,7 +17,15 @@ print("🚀 DB_HOST ENV:", os.getenv("DB_HOST"))
 
 def get_connection():
     try:
-        return mysql.connector.connect(**DB_CONFIG)
+        if DB_CONFIG["host"] and DB_CONFIG["host"].startswith("/cloudsql/"):
+            return mysql.connector.connect(
+                user=DB_CONFIG["user"],
+                password=DB_CONFIG["password"],
+                database=DB_CONFIG["database"],
+                unix_socket=DB_CONFIG["host"]
+            )
+        else:
+            return mysql.connector.connect(**DB_CONFIG)
     except Error as e:
         print(f"❌ Database connection error: {e}")
         return None
