@@ -1,133 +1,172 @@
 <!DOCTYPE html>
 <html>
-
 <head>
-    <title>Login</title>
-    <style>
-        body {
-            background-color: #1a1a1a;
-            color: #80ff80;
-            font-family: 'Courier New', monospace;
-            display: flex;
-            justify-content: center;
-            align-items: center;
-            height: 100vh;
-            margin: 0;
-        }
-
-        .login-container {
-            background-color: #000;
-            border: 1px solid #80ff80;
-            padding: 30px;
-            border-radius: 8px;
-            box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
-            text-align: center;
-        }
-
-        input[type="text"],
-        input[type="password"] {
-            width: 100%;
-            padding: 10px;
-            margin: 10px 0;
-            border: 1px solid #80ff80;
-            border-radius: 4px;
-            background-color: #1a1a1a;
-            color: #80ff80;
-        }
-
-        button {
-            background-color: #000;
-            color: #80ff80;
-            border: 1px solid #80ff80;
-            padding: 10px 20px;
-            border-radius: 4px;
-            font-weight: bold;
-            cursor: pointer;
-            margin-top: 10px;
-        }
-
-        button:hover {
-            background-color: #004400;
-            border-color: #00cc00;
-        }
-    </style>
-    <script src="/static/config.js"></script>
+  <title>Login</title>
+  <style>
+    body {
+      background-color: #1a1a1a;
+      color: #80ff80;
+      font-family: 'Courier New', monospace;
+      display: flex;
+      justify-content: center;
+      align-items: center;
+      height: 100vh;
+      margin: 0;
+    }
+    .login-container {
+      background-color: #000;
+      border: 1px solid #80ff80;
+      padding: 30px;
+      border-radius: 8px;
+      box-shadow: 0 0 10px rgba(0, 255, 0, 0.3);
+      text-align: center;
+      width: 360px;
+      max-width: 90vw;
+    }
+    input[type="text"], input[type="password"] {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      border: 1px solid #80ff80;
+      border-radius: 4px;
+      background-color: #1a1a1a;
+      color: #80ff80;
+    }
+    button, .btn {
+      display: inline-block;
+      width: 100%;
+      background-color: #000;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      border-radius: 4px;
+      font-weight: bold;
+      cursor: pointer;
+      margin-top: 10px;
+      text-decoration: none;
+    }
+    button:hover, .btn:hover {
+      background-color: #004400;
+      border-color: #00cc00;
+    }
+    .sso-divider {
+      margin: 18px 0 10px;
+      opacity: 0.8;
+      font-size: 12px;
+    }
+    .muted {
+      color: #86c486;
+      font-size: 12px;
+      margin-top: 10px;
+      opacity: 0.9;
+    }
+  </style>
+  <script src="/static/config.js"></script>
 </head>
-
 <body>
-    <div class="login-container">
-        <h2>Login</h2>
-        <input type="text" id="email" placeholder="Email">
-        <input type="password" id="password" placeholder="Password">
-        <button onclick="login()">Login</button>
-        <div id="error-message" style="color: red; margin-top: 10px;"></div>
-    </div>
+  <div class="login-container">
+    <h2>Login</h2>
 
-    <script>
-        async function login() {
-            const username = document.getElementById('email').value; // keep ID = email
-            const password = document.getElementById('password').value;
-            const errorDisplay = document.getElementById('error-message');
-            errorDisplay.textContent = "";
+    <!-- SSO Buttons -->
+    <a class="btn" href="/auth/google/start">Continue with Google</a>
+    <a class="btn" href="/auth/microsoft/start">Continue with Microsoft</a>
 
-            let loginButton = document.querySelector('button');
+    <div class="sso-divider">— or —</div>
 
-            try {
-                loginButton.disabled = true;
-                loginButton.textContent = "Logging in...";
+    <!-- Legacy password form (fallback / temporary) -->
+    <input type="text" id="email" placeholder="Email">
+    <input type="password" id="password" placeholder="Password">
+    <button onclick="login()">Login</button>
 
-                const response = await fetch(`${API_BASE_URL}/api/login/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/x-www-form-urlencoded'
-                    },
-                    body: new URLSearchParams({
-                        username: username,
-                        password: password,
-                        grant_type: "password"
-                    })
-                });
+    <div id="error-message" style="color: red; margin-top: 10px;"></div>
+    <div class="muted">Tip: SSO is preferred. Password login will be retired soon.</div>
+  </div>
 
-                if (!response.ok) {
-                    let errorMessage = 'Login failed';
-                    if (response.status === 401) {
-                        errorMessage = 'Invalid username or password';
-                    } else if (response.status === 500) {
-                        errorMessage = 'Server error. Please try again later.';
-                    }
-                    throw new Error(errorMessage);
-                }
+  <script>
+    // Handle OIDC callback: /login.html#token=...
+    (function handleSSOToken() {
+      const hash = new URLSearchParams(window.location.hash.slice(1));
+      const token = hash.get('token');
+      if (!token) return;
 
-                const data = await response.json();
-                console.log("Login success:", data);
-                localStorage.setItem('token', data.access_token);
+      try {
+        // Save token under the same key your app already uses
+        localStorage.setItem('token', token);
 
-                // Decode the JWT to extract the role
-                const payload = JSON.parse(atob(data.access_token.split('.')[1]));
-                const role = payload.role?.toLowerCase();
+        // Decode JWT payload to get role
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const role = (payload.role || '').toLowerCase();
+        if (!role) throw new Error('Missing role in token payload');
 
-                if (!role) throw new Error("Missing role in token payload.");
-                localStorage.setItem('role', role);
-
-                if (role === 'admin') {
-                    window.location.href = '/static/AdminDashboard.html';
-                } else if (role === 'manager') {
-                    window.location.href = '/static/ManagerDashboard.html';
-                } else {
-                    window.location.href = '/static/UserDashboard.html';
-                }
-
-            } catch (error) {
-                console.error("Login error:", error);
-                errorDisplay.textContent = error.message;
-            } finally {
-                if (loginButton) {
-                    loginButton.disabled = false;
-                    loginButton.textContent = "Login";
-                }
-            }
+        // Mirror your existing redirects
+        if (role === 'admin') {
+          window.location.href = '/static/AdminDashboard.html';
+        } else if (role === 'manager') {
+          window.location.href = '/static/ManagerDashboard.html';
+        } else {
+          window.location.href = '/static/UserDashboard.html';
         }
-    </script>
-</body>
+      } catch (e) {
+        console.error('SSO token handling error:', e);
+        document.getElementById('error-message').textContent = 'Sign-in failed. Please try again.';
+      }
+    })();
 
+    // Existing password login (kept as fallback)
+    async function login() {
+      const username = document.getElementById('email').value; // keep ID = email
+      const password = document.getElementById('password').value;
+      const errorDisplay = document.getElementById('error-message');
+      errorDisplay.textContent = "";
+
+      let loginButton = document.querySelector('button');
+
+      try {
+        loginButton.disabled = true;
+        loginButton.textContent = "Logging in...";
+
+        const response = await fetch(`${API_BASE_URL}/api/login/`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/x-www-form-urlencoded' },
+          body: new URLSearchParams({
+            username: username,
+            password: password,
+            grant_type: "password"
+          })
+        });
+
+        if (!response.ok) {
+          let errorMessage = 'Login failed';
+          if (response.status === 401) errorMessage = 'Invalid username or password';
+          else if (response.status === 500) errorMessage = 'Server error. Please try again later.';
+          throw new Error(errorMessage);
+        }
+
+        const data = await response.json();
+        localStorage.setItem('token', data.access_token);
+
+        const payload = JSON.parse(atob(data.access_token.split('.')[1]));
+        const role = (payload.role || '').toLowerCase();
+        if (!role) throw new Error("Missing role in token payload.");
+
+        if (role === 'admin') {
+          window.location.href = '/static/AdminDashboard.html';
+        } else if (role === 'manager') {
+          window.location.href = '/static/ManagerDashboard.html';
+        } else {
+          window.location.href = '/static/UserDashboard.html';
+        }
+
+      } catch (error) {
+        console.error("Login error:", error);
+        errorDisplay.textContent = error.message;
+      } finally {
+        if (loginButton) {
+          loginButton.disabled = false;
+          loginButton.textContent = "Login";
+        }
+      }
+    }
+  </script>
+</body>
 </html>
