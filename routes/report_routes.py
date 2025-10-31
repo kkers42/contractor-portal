@@ -1,14 +1,24 @@
 from fastapi import APIRouter, Body
 from db import fetch_query
+from pydantic import BaseModel
+from typing import Optional
+from datetime import date
 
 router = APIRouter()
 
+class ReportFilters(BaseModel):
+    """Filters for generating reports"""
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+    property_id: Optional[int] = None
+    user_id: Optional[int] = None
+
 @router.post("/report/by-product/")
-def report_by_product(filters: dict = Body(...)):
-    start = filters.get("start_date")
-    end = filters.get("end_date")
-    property_id = filters.get("property_id")
-    user_id = filters.get("user_id")
+def report_by_product(filters: ReportFilters):
+    start = filters.start_date
+    end = filters.end_date
+    property_id = filters.property_id
+    user_id = filters.user_id
 
     where_clauses = []
     params = []
@@ -48,11 +58,11 @@ def report_by_product(filters: dict = Body(...)):
     return fetch_query(query, params)
 
 @router.post("/report/by-property/")
-def report_by_property(filters: dict = Body(...)):
-    start = filters.get("start_date")
-    end = filters.get("end_date")
-    property_id = filters.get("property_id")
-    user_id = filters.get("user_id")
+def report_by_property(filters: ReportFilters):
+    start = filters.start_date
+    end = filters.end_date
+    property_id = filters.property_id
+    user_id = filters.user_id
 
     conditions = []
     params = []
@@ -92,11 +102,11 @@ def report_by_property(filters: dict = Body(...)):
     return fetch_query(query, params)
 
 @router.post("/report/by-user/")
-def report_by_user(filters: dict = Body(...)):
-    start = filters.get("start_date")
-    end = filters.get("end_date")
-    property_id = filters.get("property_id")
-    user_id = filters.get("user_id")
+def report_by_user(filters: ReportFilters):
+    start = filters.start_date
+    end = filters.end_date
+    property_id = filters.property_id
+    user_id = filters.user_id
 
     conditions = []
     params = []

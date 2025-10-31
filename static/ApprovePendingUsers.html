@@ -1,0 +1,292 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Approve Pending Users</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1a1a1a;
+            color: #80ff80;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+        }
+        .back-link {
+            display: inline-block;
+            margin-bottom: 20px;
+            padding: 10px 20px;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            text-decoration: none;
+            border-radius: 4px;
+        }
+        .back-link:hover {
+            background-color: #004400;
+        }
+        .pending-user-card {
+            background-color: #000;
+            border: 1px solid #80ff80;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+            box-shadow: 0 0 10px rgba(0,255,0,0.2);
+        }
+        .user-header {
+            display: flex;
+            align-items: center;
+            margin-bottom: 15px;
+            gap: 15px;
+        }
+        .user-avatar {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: 2px solid #80ff80;
+        }
+        .user-info {
+            flex: 1;
+        }
+        .user-info h3 {
+            margin: 0 0 5px 0;
+            color: #80ff80;
+        }
+        .user-info p {
+            margin: 0;
+            font-size: 14px;
+            opacity: 0.8;
+        }
+        .identity-badges {
+            display: flex;
+            gap: 10px;
+            margin: 10px 0;
+            flex-wrap: wrap;
+        }
+        .identity-badge {
+            background-color: #111;
+            padding: 5px 10px;
+            border-radius: 4px;
+            border: 1px solid #80ff80;
+            font-size: 12px;
+        }
+        .actions {
+            display: flex;
+            gap: 10px;
+            margin-top: 15px;
+            flex-wrap: wrap;
+        }
+        .role-select {
+            padding: 8px;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        button {
+            padding: 8px 16px;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            cursor: pointer;
+            border-radius: 4px;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+        button.approve {
+            border-color: #00cc00;
+            color: #00cc00;
+        }
+        button.reject {
+            border-color: #ff4444;
+            color: #ff4444;
+        }
+        button.reject:hover {
+            background-color: #440000;
+        }
+        .empty-state {
+            text-align: center;
+            padding: 40px;
+            opacity: 0.6;
+        }
+        .timestamp {
+            font-size: 12px;
+            opacity: 0.6;
+        }
+    </style>
+</head>
+<body onload="checkAccess(['Admin']); loadPendingUsers();">
+
+<a href="/static/AdminDashboard.html" class="back-link">← Back to Admin Dashboard</a>
+
+<h2>Pending User Approvals</h2>
+
+<div id="pendingUsersContainer"></div>
+
+<script>
+    async function loadPendingUsers() {
+        const container = document.getElementById('pendingUsersContainer');
+        container.innerHTML = '<p style="text-align: center;">Loading pending users...</p>';
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/admin/pending-users/`, {
+                headers: { 'Authorization': `Bearer ${token}` }
+            });
+
+            if (!response.ok) {
+                throw new Error('Failed to load pending users');
+            }
+
+            const users = await response.json();
+
+            if (users.length === 0) {
+                container.innerHTML = `
+                    <div class="empty-state">
+                        <h3>✓ No Pending Approvals</h3>
+                        <p>All new signups have been processed.</p>
+                    </div>
+                `;
+                return;
+            }
+
+            container.innerHTML = users.map(user => {
+                const identities = user.identities ? user.identities.split(', ') : [];
+                const createdAt = new Date(user.created_at).toLocaleString();
+                
+                return `
+                    <div class="pending-user-card" id="user-${user.id}">
+                        <div class="user-header">
+                            ${user.avatar_url ? 
+                                `<img src="${user.avatar_url}" alt="Avatar" class="user-avatar">` :
+                                `<div class="user-avatar" style="background-color: #111; display: flex; align-items: center; justify-content: center;">👤</div>`
+                            }
+                            <div class="user-info">
+                                <h3>${user.display_name || 'Unknown User'}</h3>
+                                <p>${user.email || 'No email'}</p>
+                                <p class="timestamp">Signed up: ${createdAt}</p>
+                            </div>
+                        </div>
+                        
+                        <div class="identity-badges">
+                            ${identities.map(id => {
+                                const [provider, email] = id.split(':');
+                                return `<span class="identity-badge">${provider}: ${email}</span>`;
+                            }).join('')}
+                        </div>
+                        
+                        <div class="actions">
+                            <select id="role-${user.id}" class="role-select">
+                                <option value="User" selected>User (Subcontractor)</option>
+                                <option value="Manager">Manager</option>
+                                <option value="Admin">Admin</option>
+                            </select>
+                            <button class="approve" onclick="approveUser(${user.id})">✓ Approve</button>
+                            <button class="reject" onclick="rejectUser(${user.id})">✗ Reject</button>
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+        } catch (error) {
+            console.error('Error loading pending users:', error);
+            container.innerHTML = `
+                <div style="text-align: center; color: #ff4444;">
+                    <p>Error loading pending users.</p>
+                    <p>${error.message}</p>
+                </div>
+            `;
+        }
+    }
+
+    async function approveUser(userId) {
+        const roleSelect = document.getElementById(`role-${userId}`);
+        const role = roleSelect.value;
+
+        if (!confirm(`Approve this user as ${role}?`)) {
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('token');
+            const formData = new URLSearchParams();
+            formData.append('role', role);
+
+            const response = await fetch(`${API_BASE_URL}/admin/approve-user/${userId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`,
+                    'Content-Type': 'application/x-www-form-urlencoded'
+                },
+                body: formData
+            });
+
+            const result = await response.json();
+
+            if (result.ok) {
+                alert(result.message);
+                // Remove the card from the page
+                document.getElementById(`user-${userId}`).remove();
+                
+                // Check if there are any cards left
+                const container = document.getElementById('pendingUsersContainer');
+                if (container.children.length === 0) {
+                    loadPendingUsers(); // Reload to show empty state
+                }
+            } else {
+                alert(result.message);
+            }
+
+        } catch (error) {
+            console.error('Error approving user:', error);
+            alert('Failed to approve user. Please try again.');
+        }
+    }
+
+    async function rejectUser(userId) {
+        if (!confirm('Are you sure you want to reject and delete this user?')) {
+            return;
+        }
+
+        try {
+            const token = localStorage.getItem('token');
+            const response = await fetch(`${API_BASE_URL}/admin/reject-user/${userId}`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${token}`
+                }
+            });
+
+            const result = await response.json();
+
+            if (result.ok) {
+                alert(result.message);
+                // Remove the card from the page
+                document.getElementById(`user-${userId}`).remove();
+                
+                // Check if there are any cards left
+                const container = document.getElementById('pendingUsersContainer');
+                if (container.children.length === 0) {
+                    loadPendingUsers(); // Reload to show empty state
+                }
+            } else {
+                alert(result.message);
+            }
+
+        } catch (error) {
+            console.error('Error rejecting user:', error);
+            alert('Failed to reject user. Please try again.');
+        }
+    }
+</script>
+
+</body>
+</html>

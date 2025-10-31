@@ -77,13 +77,34 @@ async def callback(request: Request, provider: str):
         raise HTTPException(400, "OIDC response missing 'sub'")
 
     user_id = get_user_by_identity(provider, sub)
+    user_status = None
+    user_role = "User"
+    
     if not user_id:
         if email:
-            user_id = get_user_by_email(email)
+            existing = get_user_by_email(email)
+            if existing:
+                user_id, user_status, user_role = existing
+        
         if not user_id:
+            # New user - create in pending status
             user_id = create_user(email=email, display_name=name, avatar_url=picture)
+            user_status = "pending"
+        
         upsert_identity(user_id, provider, sub, email, email_verified)
+    else:
+        # Existing identity - get their status and role
+        from db.identities import get_user_status_and_role
+        user_status, user_role = get_user_status_and_role(user_id)
+
+    # Check if user is approved
+    if user_status == "pending":
+        # Redirect to a "pending approval" page instead of giving them a token
+        return RedirectResponse(f"{settings.APP_BASE_URL}/static/pending-approval.html", status_code=302)
+    
+    if user_status == "suspended":
+        raise HTTPException(403, "Your account has been suspended. Contact an administrator.")
 
     touch_last_login(user_id)
-    app_jwt = _issue_app_jwt(user_id=user_id, role="User")
+    app_jwt = _issue_app_jwt(user_id=user_id, role=user_role)
     return RedirectResponse(f"{settings.APP_BASE_URL}/login.html#token={app_jwt}", status_code=302)

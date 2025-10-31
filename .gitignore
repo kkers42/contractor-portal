@@ -6,6 +6,11 @@ __pycache__/
 .DS_Store
 Thumbs.db
 
+# Environment variables (SECURITY: Contains passwords and secrets)
+.env
+.env.local
+.env.production
+
 # Python virtual environments
 env/
 venv/
@@ -17,6 +22,8 @@ venv/
 # Compiled files or database dumps
 *.sqlite3
 *.db
+contractor_portal_backup.sql
+*_backup.sql
 
 # Logs or temp files
 *.log

@@ -30,6 +30,9 @@ def get_connection():
         print(f"[ERROR] Database connection error: {e}")
         return None
 
+# Alias for compatibility with identities.py
+get_conn = get_connection
+
 def fetch_query(query, params=None):
     conn = get_connection()
     if not conn:

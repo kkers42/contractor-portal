@@ -20,16 +20,31 @@ def get_user_by_identity(provider: str, subject: str) -> Optional[int]:
             row = cur.fetchone()
             return int(row[0]) if row else None
 
-def get_user_by_email(email: str) -> Optional[int]:
-    sql = "SELECT id FROM users WHERE email=%s"
+def get_user_by_email(email: str) -> Optional[tuple]:
+    """Returns (user_id, status, role) or None"""
+    sql = "SELECT id, status, role FROM users WHERE email=%s"
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (email,))
             row = cur.fetchone()
-            return int(row[0]) if row else None
+            if row:
+                return (int(row[0]), row[1], row[2])
+            return None
+
+def get_user_status_and_role(user_id: int) -> tuple:
+    """Returns (status, role) for a user"""
+    sql = "SELECT status, role FROM users WHERE id=%s"
+    with get_conn() as conn:
+        with conn.cursor() as cur:
+            cur.execute(sql, (user_id,))
+            row = cur.fetchone()
+            if row:
+                return (row[0], row[1])
+            return ("pending", "User")
 
 def create_user(email: Optional[str], display_name: Optional[str], avatar_url: Optional[str]) -> int:
-    sql = "INSERT INTO users (email, display_name, avatar_url, created_at, updated_at) VALUES (%s,%s,%s,NOW(),NOW())"
+    sql = """INSERT INTO users (email, display_name, avatar_url, status, role, created_at, updated_at) 
+             VALUES (%s,%s,%s,'pending','User',NOW(),NOW())"""
     with get_conn() as conn:
         with conn.cursor() as cur:
             cur.execute(sql, (email, display_name, avatar_url))
