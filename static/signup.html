@@ -59,10 +59,63 @@
         a:hover {
             color: #00cc00;
         }
+
+        .oauth-btn {
+            display: block;
+            width: 100%;
+            max-width: 400px;
+            margin: 10px auto;
+            padding: 12px;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            text-align: center;
+            text-decoration: none;
+            font-family: 'Courier New', monospace;
+            cursor: pointer;
+            box-sizing: border-box;
+        }
+
+        .oauth-btn:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+
+        .sso-divider {
+            margin: 18px 0 10px;
+            opacity: 0.8;
+            font-size: 12px;
+            text-align: center;
+            color: #86c486;
+        }
+
+        .oauth-section {
+            max-width: 400px;
+            margin: 20px auto;
+            text-align: center;
+        }
+
+        .muted {
+            color: #86c486;
+            font-size: 12px;
+            margin-top: 10px;
+            opacity: 0.9;
+            text-align: center;
+        }
     </style>
 </head>
 	<body>
 		<h2>Signup</h2>
+
+		<!-- OAuth Signup Section -->
+		<div class="oauth-section">
+			<a class="oauth-btn" href="/auth/google/start">Sign up with Google</a>
+			<a class="oauth-btn" href="/auth/microsoft/start">Sign up with Microsoft</a>
+			<div class="sso-divider">— or sign up with email —</div>
+			<div class="muted">OAuth sign-ups require admin approval before access is granted.</div>
+		</div>
+
+		<!-- Traditional Email/Password Signup -->
 		<form id="signupForm">
 		<input type="text" name="name" id="name" placeholder="Full Name" required>
 		<input type="email" name="email" id="email" placeholder="Email" required>
