@@ -36,10 +36,8 @@ def add_property(property_data: PropertyData):
 @router.get("/properties/")
 def get_properties():
     properties = fetch_query("SELECT * FROM locations")
-    if properties:
-        return properties
-    else:
-        raise HTTPException(status_code=404, detail="No properties found")
+    # Return empty array instead of 404 if no properties exist
+    return properties if properties else []
 
 @router.put("/update-property/")
 def update_property(property_data: PropertyUpdate):

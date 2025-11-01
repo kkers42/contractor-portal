@@ -15,6 +15,19 @@ def signup_request(
     role: str = Form(...),
     password: str = Form(...)
 ):
+    # First, save to database with pending status
+    hashed_pw = hash_password(password)
+    try:
+        query = """
+            INSERT INTO users (name, phone, email, role, password, status)
+            VALUES (%s, %s, %s, %s, %s, 'pending')
+        """
+        values = (name, phone, email, role, hashed_pw)
+        execute_query(query, values)
+    except Exception as e:
+        return {"message": f"❌ Failed to save signup request: {str(e)}"}
+
+    # Then try to send email notification (non-critical)
     try:
         msg = MIMEText(f"""
 New signup request:
@@ -23,6 +36,8 @@ Name: {name}
 Email: {email}
 Phone: {phone}
 Role: {role}
+
+Please review in the Admin Dashboard under Pending Users.
         """)
         msg["Subject"] = "New Signup Request"
         msg["From"] = os.getenv("EMAIL_USER")
@@ -33,10 +48,11 @@ Role: {role}
         server.login(os.getenv("EMAIL_USER"), os.getenv("EMAIL_PASSWORD"))
         server.sendmail(os.getenv("EMAIL_USER"), os.getenv("EMAIL_USER"), msg.as_string())
         server.quit()
-
-        return {"message": "✅ Signup request sent!"}
+        print("[INFO] Signup notification email sent successfully")
     except Exception as e:
-        return {"message": f"❌ Failed to send signup request: {str(e)}"}
+        print(f"[WARN] Failed to send signup email (non-critical): {str(e)}")
+
+    return {"message": "✅ Signup request submitted! Awaiting admin approval."}
 
 @router.post("/request-user/")
 def request_user(

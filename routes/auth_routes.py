@@ -19,14 +19,29 @@ class User(BaseModel):
 def get_users(current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
-    return fetch_query("SELECT id, name, phone, email, role FROM users")
+    users = fetch_query("SELECT id, name, phone, email, role, status FROM users WHERE status != 'pending'")
+    return users if users else []
 
 @router.post("/add-user/")
-def add_user(user: User):
-    hashed_pw = hash_password(user.password)
-    query = "INSERT INTO users (name, phone, email, role, password) VALUES (%s, %s, %s, %s, %s)"
-    execute_query(query, (user.name, user.phone, user.email, user.role, hashed_pw))
-    return {"message": "User added successfully!"}
+def add_user(
+    name: str = Form(...),
+    phone: str = Form(...),
+    email: str = Form(...),
+    role: str = Form(...),
+    password: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    # Check admin permission
+    if current_user["role"] != "Admin":
+        raise HTTPException(status_code=403, detail="Admins only!")
+
+    try:
+        hashed_pw = hash_password(password)
+        query = "INSERT INTO users (name, phone, email, role, password, status) VALUES (%s, %s, %s, %s, %s, 'active')"
+        execute_query(query, (name, phone, email, role, hashed_pw))
+        return {"message": "User added successfully!"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
 
 @router.put("/update-user/{user_id}")
 def update_user(user_id: int, user: User, current_user: dict = Depends(get_current_user)):
