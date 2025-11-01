@@ -15,17 +15,39 @@ def signup_request(
     role: str = Form(...),
     password: str = Form(...)
 ):
+    print(f"[INFO] Processing signup request for: {email}")
+
     # First, save to database with pending status
     hashed_pw = hash_password(password)
     try:
+        # Check if status column exists, if not use query without it
         query = """
             INSERT INTO users (name, phone, email, role, password, status)
             VALUES (%s, %s, %s, %s, %s, 'pending')
         """
         values = (name, phone, email, role, hashed_pw)
         execute_query(query, values)
+        print(f"[SUCCESS] User created with pending status: {email}")
     except Exception as e:
-        return {"message": f"❌ Failed to save signup request: {str(e)}"}
+        error_msg = str(e)
+        print(f"[ERROR] Failed to save signup request: {error_msg}")
+
+        # If status column doesn't exist, try without it
+        if "status" in error_msg.lower() or "unknown column" in error_msg.lower():
+            try:
+                print("[INFO] Retrying without status column...")
+                query = """
+                    INSERT INTO users (name, phone, email, role, password)
+                    VALUES (%s, %s, %s, %s, %s)
+                """
+                values = (name, phone, email, role, hashed_pw)
+                execute_query(query, values)
+                print(f"[SUCCESS] User created without status: {email}")
+            except Exception as e2:
+                print(f"[ERROR] Retry also failed: {str(e2)}")
+                raise HTTPException(status_code=500, detail=f"Failed to save signup request: {str(e2)}")
+        else:
+            raise HTTPException(status_code=500, detail=f"Failed to save signup request: {error_msg}")
 
     # Then try to send email notification (non-critical)
     try:
