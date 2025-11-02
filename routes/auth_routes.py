@@ -39,8 +39,8 @@ def add_user(
         hashed_pw = hash_password(password)
         # Generate username from email
         username = email.split('@')[0]
-        query = "INSERT INTO users (name, phone, username, email, role, password, status) VALUES (%s, %s, %s, %s, %s, %s, 'active')"
-        execute_query(query, (name, phone, username, email, role, hashed_pw))
+        query = "INSERT INTO users (name, phone, username, email, role, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')"
+        execute_query(query, (name, phone, username, email, role, hashed_pw, hashed_pw))
         return {"message": "User added successfully!"}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
