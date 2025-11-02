@@ -19,13 +19,15 @@ def signup_request(
 
     # First, save to database with pending status
     hashed_pw = hash_password(password)
+    # Generate username from email (everything before @)
+    username = email.split('@')[0]
     try:
         # Check if status column exists, if not use query without it
         query = """
-            INSERT INTO users (name, phone, email, role, password, status)
-            VALUES (%s, %s, %s, %s, %s, 'pending')
+            INSERT INTO users (name, phone, username, email, role, password, status)
+            VALUES (%s, %s, %s, %s, %s, %s, 'pending')
         """
-        values = (name, phone, email, role, hashed_pw)
+        values = (name, phone, username, email, role, hashed_pw)
         execute_query(query, values)
         print(f"[SUCCESS] User created with pending status: {email}")
     except Exception as e:
@@ -37,10 +39,10 @@ def signup_request(
             try:
                 print("[INFO] Retrying without status column...")
                 query = """
-                    INSERT INTO users (name, phone, email, role, password)
-                    VALUES (%s, %s, %s, %s, %s)
+                    INSERT INTO users (name, phone, username, email, role, password)
+                    VALUES (%s, %s, %s, %s, %s, %s)
                 """
-                values = (name, phone, email, role, hashed_pw)
+                values = (name, phone, username, email, role, hashed_pw)
                 execute_query(query, values)
                 print(f"[SUCCESS] User created without status: {email}")
             except Exception as e2:
