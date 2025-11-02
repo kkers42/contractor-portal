@@ -113,8 +113,9 @@ Please review and add this user manually in the Admin Dashboard.
 def get_signup_requests(current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=403, detail="Admins only!")
-    query = "SELECT * FROM signup_requests ORDER BY request_date DESC"
-    return fetch_query(query)
+    query = "SELECT id, name, phone, email, role, created_at as request_date FROM users WHERE status = 'pending' ORDER BY created_at DESC"
+    results = fetch_query(query)
+    return results if results else []
 
 @router.post("/approve-signup-requests/")
 def approve_signup_requests(request_ids: list[int], current_user: dict = Depends(get_current_user)):
@@ -124,25 +125,11 @@ def approve_signup_requests(request_ids: list[int], current_user: dict = Depends
         raise HTTPException(status_code=400, detail="No request IDs provided")
 
     placeholders = ','.join(['%s'] * len(request_ids))
-    query_fetch = f"SELECT * FROM signup_requests WHERE id IN ({placeholders})"
-    requests = fetch_query(query_fetch, request_ids)
+    # Update status from 'pending' to 'active' for approved users
+    query_update = f"UPDATE users SET status = 'active' WHERE id IN ({placeholders}) AND status = 'pending'"
+    execute_query(query_update, request_ids)
 
-    if not requests:
-        raise HTTPException(status_code=404, detail="No matching requests found")
-
-    for req in requests:
-        hashed_pw = hash_password("TempPassword123")
-        insert_query = """
-            INSERT INTO users (name, phone, email, role, password)
-            VALUES (%s, %s, %s, %s, %s)
-        """
-        insert_values = (req['name'], req['phone'], req['email'], req['role'], hashed_pw)
-        execute_query(insert_query, insert_values)
-
-    query_delete = f"DELETE FROM signup_requests WHERE id IN ({placeholders})"
-    execute_query(query_delete, request_ids)
-
-    return {"message": f"{len(request_ids)} signup requests approved and users created!"}
+    return {"message": f"{len(request_ids)} signup requests approved!"}
 
 @router.put("/update-signup-email/")
 def update_signup_email(new_email: str = Form(...)):
