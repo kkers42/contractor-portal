@@ -83,19 +83,33 @@ def request_user(
     name: str = Form(...),
     phone: str = Form(...),
     email: str = Form(...),
-    role: str = Form(...)
+    role: str = Form(...),
+    password: str = Form(...)
 ):
-    admin_email = get_admin_email()
+    # Generate temp password if not provided
+    if not password:
+        password = "TempPassword123"
 
-    query = """
-        INSERT INTO signup_requests (name, phone, email, role)
-        VALUES (%s, %s, %s, %s)
-    """
-    values = (name, phone, email, role)
-    execute_query(query, values)
+    hashed_pw = hash_password(password)
+    username = email.split('@')[0]
 
-    subject = "New User Signup Request"
-    body = f"""
+    try:
+        query = """
+            INSERT INTO users (name, phone, username, email, role, password, password_hash, status)
+            VALUES (%s, %s, %s, %s, %s, %s, %s, 'pending')
+        """
+        values = (name, phone, username, email, role, hashed_pw, hashed_pw)
+        execute_query(query, values)
+        print(f"[SUCCESS] User request created with pending status: {email}")
+    except Exception as e:
+        print(f"[ERROR] Failed to save user request: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to save user request: {str(e)}")
+
+    # Try to send email notification (non-critical)
+    try:
+        admin_email = get_admin_email()
+        subject = "New User Signup Request"
+        body = f"""
 A new user signup request was submitted.
 
 Name: {name}
@@ -103,9 +117,11 @@ Phone: {phone}
 Email: {email}
 Role: {role}
 
-Please review and add this user manually in the Admin Dashboard.
-    """
-    send_email(admin_email, subject, body)
+Please review and approve in the Admin Dashboard under Pending Users.
+        """
+        send_email(admin_email, subject, body)
+    except Exception as e:
+        print(f"[WARN] Failed to send notification email: {str(e)}")
 
     return {"message": "Signup request sent and saved to DB!"}
 
@@ -143,8 +159,8 @@ def reset_password(email: str = Form(...), new_password: str = Form(...), curren
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
 
     hashed_pw = hash_password(new_password)
-    query = "UPDATE users SET password = %s WHERE email = %s"
-    success = execute_query(query, (hashed_pw, email))
+    query = "UPDATE users SET password = %s, password_hash = %s, updated_at = NOW() WHERE email = %s"
+    success = execute_query(query, (hashed_pw, hashed_pw, email))
 
     if success:
         return {"message": "Password reset successful"}

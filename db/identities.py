@@ -43,11 +43,16 @@ def get_user_status_and_role(user_id: int) -> tuple:
             return ("pending", "User")
 
 def create_user(email: Optional[str], display_name: Optional[str], avatar_url: Optional[str]) -> int:
-    sql = """INSERT INTO users (email, display_name, avatar_url, status, role, created_at, updated_at) 
-             VALUES (%s,%s,%s,'pending','User',NOW(),NOW())"""
+    # Generate username from email
+    username = email.split('@')[0] if email else "oauth_user"
+    # Use display_name for name field if available, otherwise use username
+    name = display_name if display_name else username
+
+    sql = """INSERT INTO users (name, username, email, display_name, avatar_url, password, password_hash, status, role, created_at, updated_at)
+             VALUES (%s,%s,%s,%s,%s,'','','pending','User',NOW(),NOW())"""
     with get_conn() as conn:
         with conn.cursor() as cur:
-            cur.execute(sql, (email, display_name, avatar_url))
+            cur.execute(sql, (name, username, email, display_name, avatar_url))
             user_id = cur.lastrowid
         conn.commit()
     return int(user_id)

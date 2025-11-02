@@ -50,8 +50,9 @@ def update_user(user_id: int, user: User, current_user: dict = Depends(get_curre
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
     hashed_pw = hash_password(user.password)
-    query = "UPDATE users SET name = %s, phone = %s, email = %s, role = %s, password = %s WHERE id = %s"
-    values = (user.name, user.phone, user.email, user.role, hashed_pw, user_id)
+    username = user.email.split('@')[0]
+    query = "UPDATE users SET name = %s, phone = %s, username = %s, email = %s, role = %s, password = %s, password_hash = %s, updated_at = NOW() WHERE id = %s"
+    values = (user.name, user.phone, username, user.email, user.role, hashed_pw, hashed_pw, user_id)
     execute_query(query, values)
     return {"message": "User updated successfully!"}
 
@@ -121,10 +122,11 @@ def admin_create_user(
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=403, detail="Not authorized")
     hashed_pw = hash_password(password)
+    username = email.split('@')[0]
     try:
         execute_query(
-            "INSERT INTO users (name, phone, email, role, password) VALUES (%s, %s, %s, %s, %s)",
-            (name, phone, email, role, hashed_pw)
+            "INSERT INTO users (name, phone, username, email, role, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')",
+            (name, phone, username, email, role, hashed_pw, hashed_pw)
         )
         return {"ok": True, "message": "User created successfully"}
     except Exception as e:
