@@ -23,26 +23,20 @@ def get_users(current_user: dict = Depends(get_current_user)):
     return users if users else []
 
 @router.post("/add-user/")
-def add_user(
-    name: str = Form(...),
-    phone: str = Form(...),
-    email: str = Form(...),
-    role: str = Form(...),
-    password: str = Form(...),
-    current_user: dict = Depends(get_current_user)
-):
+def add_user(user: User, current_user: dict = Depends(get_current_user)):
     # Check admin permission
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=403, detail="Admins only!")
 
     try:
-        hashed_pw = hash_password(password)
+        hashed_pw = hash_password(user.password)
         # Generate username from email
-        username = email.split('@')[0]
+        username = user.email.split('@')[0]
         query = "INSERT INTO users (name, phone, username, email, role, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, 'active')"
-        execute_query(query, (name, phone, username, email, role, hashed_pw, hashed_pw))
+        execute_query(query, (user.name, user.phone, username, user.email, user.role, hashed_pw, hashed_pw))
         return {"message": "User added successfully!"}
     except Exception as e:
+        print(f"[ERROR] Failed to add user: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
 
 @router.put("/update-user/{user_id}")

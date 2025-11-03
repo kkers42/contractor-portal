@@ -59,7 +59,7 @@ def get_properties():
 @router.put("/update-property/")
 def update_property(property_data: PropertyUpdate):
     query = """
-        UPDATE locations 
+        UPDATE locations
         SET name = %s, address = %s, sqft = %s, area_manager = %s, plow = %s, salt = %s
         WHERE id = %s
     """
@@ -72,20 +72,22 @@ def update_property(property_data: PropertyUpdate):
         property_data.salt,
         property_data.id
     )
-    success = execute_query(query, params)
-    if success:
+    try:
+        execute_query(query, params)
         return {"message": "Property updated successfully"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to update property")
+    except Exception as e:
+        print(f"[ERROR] Failed to update property: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to update property: {str(e)}")
 
 @router.delete("/delete-property/{property_id}")
 def delete_property(property_id: int):
     query = "DELETE FROM locations WHERE id = %s"
-    success = execute_query(query, (property_id,))
-    if success:
+    try:
+        execute_query(query, (property_id,))
         return {"message": "Property deleted successfully"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to delete property")
+    except Exception as e:
+        print(f"[ERROR] Failed to delete property: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to delete property: {str(e)}")
 
 @router.post("/bulk-import-properties/")
 async def bulk_import_properties(
