@@ -5,6 +5,7 @@ mysql-connector-python
 python-jose
 passlib[bcrypt]
 pandas
+openpyxl
 python-multipart
 authlib
 itsdangerous
