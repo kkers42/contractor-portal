@@ -1,7 +1,7 @@
 # Handles add/update/delete/fetch property routes
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
-from db import insert_location, fetch_query, execute_query
+from db import fetch_query, execute_query
 from auth import get_current_user
 import pandas as pd
 from io import BytesIO
@@ -21,7 +21,11 @@ class PropertyUpdate(PropertyData):
 
 @router.post("/add-property/")
 def add_property(property_data: PropertyData):
-    success = insert_location(
+    query = """
+        INSERT INTO locations (name, address, sqft, area_manager, plow, salt)
+        VALUES (%s, %s, %s, %s, %s, %s)
+    """
+    params = (
         property_data.name,
         property_data.address,
         property_data.sqft,
@@ -29,10 +33,12 @@ def add_property(property_data: PropertyData):
         property_data.plow,
         property_data.salt
     )
-    if success:
+    try:
+        execute_query(query, params)
         return {"message": "Property added successfully"}
-    else:
-        raise HTTPException(status_code=500, detail="Failed to add property")
+    except Exception as e:
+        print(f"[ERROR] Failed to add property: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to add property: {str(e)}")
 
 @router.get("/properties/")
 def get_properties():
@@ -127,19 +133,20 @@ async def bulk_import_properties(
                 sqft = int(row['Lot Sq Ft'])
 
                 # Insert property
-                success = insert_location(
-                    name=str(row['Property Name']).strip(),
-                    address=str(row['Address']).strip(),
-                    sqft=sqft,
-                    area_manager=str(row['area manager']).strip(),
-                    plow=plow,
-                    salt=salt
+                query = """
+                    INSERT INTO locations (name, address, sqft, area_manager, plow, salt)
+                    VALUES (%s, %s, %s, %s, %s, %s)
+                """
+                params = (
+                    str(row['Property Name']).strip(),
+                    str(row['Address']).strip(),
+                    sqft,
+                    str(row['area manager']).strip(),
+                    plow,
+                    salt
                 )
-
-                if success:
-                    imported_count += 1
-                else:
-                    errors.append(f"Row {index + 2}: Failed to insert property")
+                execute_query(query, params)
+                imported_count += 1
 
             except Exception as e:
                 errors.append(f"Row {index + 2}: {str(e)}")
