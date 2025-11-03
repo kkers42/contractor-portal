@@ -21,6 +21,16 @@ class PropertyUpdate(PropertyData):
 
 @router.post("/add-property/")
 def add_property(property_data: PropertyData):
+    # Check if property with this address already exists
+    check_query = "SELECT id, name FROM locations WHERE address = %s"
+    existing = fetch_query(check_query, (property_data.address,))
+
+    if existing:
+        raise HTTPException(
+            status_code=400,
+            detail=f"A property already exists at this address: {existing[0]['name']}"
+        )
+
     query = """
         INSERT INTO locations (name, address, sqft, area_manager, plow, salt)
         VALUES (%s, %s, %s, %s, %s, %s)
@@ -120,6 +130,7 @@ async def bulk_import_properties(
         df = df[df['Property Name'].notna()]
 
         imported_count = 0
+        skipped_count = 0
         errors = []
 
         for index, row in df.iterrows():
@@ -132,6 +143,17 @@ async def bulk_import_properties(
                 # Convert sqft to integer
                 sqft = int(row['Lot Sq Ft'])
 
+                address = str(row['Address']).strip()
+
+                # Check if property with this address already exists
+                check_query = "SELECT id FROM locations WHERE address = %s"
+                existing = fetch_query(check_query, (address,))
+
+                if existing:
+                    # Property already exists, skip it
+                    skipped_count += 1
+                    continue
+
                 # Insert property
                 query = """
                     INSERT INTO locations (name, address, sqft, area_manager, plow, salt)
@@ -139,7 +161,7 @@ async def bulk_import_properties(
                 """
                 params = (
                     str(row['Property Name']).strip(),
-                    str(row['Address']).strip(),
+                    address,
                     sqft,
                     str(row['area manager']).strip(),
                     plow,
@@ -153,17 +175,21 @@ async def bulk_import_properties(
 
         # Prepare response
         message = f"Successfully imported {imported_count} properties"
+        if skipped_count > 0:
+            message += f", skipped {skipped_count} duplicates"
         if errors:
             message += f". {len(errors)} errors occurred."
             return {
                 "message": message,
                 "count": imported_count,
+                "skipped": skipped_count,
                 "errors": errors[:10]  # Limit to first 10 errors
             }
 
         return {
             "message": message,
-            "count": imported_count
+            "count": imported_count,
+            "skipped": skipped_count
         }
 
     except pd.errors.EmptyDataError:
