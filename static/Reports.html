@@ -165,6 +165,7 @@
         <th>Date</th>
         <th>Property</th>
         <th>Contractor</th>
+        <th>Worker</th>
         <th>Equipment</th>
         <th>Time In</th>
         <th>Time Out</th>
@@ -177,7 +178,7 @@
       </tr>
     </thead>
     <tbody id="logsTableBody">
-      <tr><td colspan="12" class="no-data">Loading logs...</td></tr>
+      <tr><td colspan="13" class="no-data">Loading logs...</td></tr>
     </tbody>
   </table>
 
@@ -281,7 +282,7 @@
       const tbody = document.getElementById('logsTableBody');
 
       if (logs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="12" class="no-data">No logs found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="13" class="no-data">No logs found</td></tr>';
         document.getElementById('summary').style.display = 'none';
         return;
       }
@@ -306,7 +307,8 @@
           <tr>
             <td>${timeIn.toLocaleDateString()}</td>
             <td>${log.property_name}</td>
-            <td>${log.subcontractor_name}</td>
+            <td>${log.contractor_name || 'N/A'}</td>
+            <td>${log.worker_name || 'N/A'}</td>
             <td>${log.equipment || 'N/A'}</td>
             <td>${timeIn.toLocaleTimeString()}</td>
             <td>${timeOut.toLocaleTimeString()}</td>

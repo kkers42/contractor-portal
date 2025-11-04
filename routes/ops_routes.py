@@ -7,7 +7,9 @@ router = APIRouter()
 # --- Winter Ops Model ---
 class WinterOpsLog(BaseModel):
     property_id: int
-    subcontractor_name: str
+    contractor_id: int
+    contractor_name: str
+    worker_name: str  # The subcontractor/worker (Last, First)
     equipment: str
     time_in: str
     time_out: str
@@ -21,12 +23,14 @@ class WinterOpsLog(BaseModel):
 def submit_winter_log(log: WinterOpsLog):
     query = """
         INSERT INTO winter_ops_logs
-        (property_id, subcontractor_name, equipment, time_in, time_out, bulk_salt_qty, bag_salt_qty, calcium_chloride_qty, customer_provided, notes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        (property_id, contractor_id, contractor_name, worker_name, equipment, time_in, time_out, bulk_salt_qty, bag_salt_qty, calcium_chloride_qty, customer_provided, notes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     values = (
         log.property_id,
-        log.subcontractor_name,
+        log.contractor_id,
+        log.contractor_name,
+        log.worker_name,
         log.equipment,
         log.time_in,
         log.time_out,
@@ -43,7 +47,8 @@ def submit_winter_log(log: WinterOpsLog):
 def get_winter_logs():
     query = """
         SELECT
-            w.id, l.name AS property_name, w.subcontractor_name, w.equipment,
+            w.id, l.name AS property_name,
+            w.contractor_id, w.contractor_name, w.worker_name, w.equipment,
             w.time_in, w.time_out,
             w.bulk_salt_qty, w.bag_salt_qty, w.calcium_chloride_qty, w.customer_provided, w.notes
         FROM winter_ops_logs w

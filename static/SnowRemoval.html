@@ -65,23 +65,14 @@
         <label for="property">Property</label>
         <select id="property" required></select>
 
-        <label for="subcontractor">Subcontractor Name</label>
-        <input type="text" id="subcontractor" readonly>
+        <label for="contractor">Contractor (Manager)</label>
+        <select id="contractor" required></select>
 
-        <label for="service">Service</label>
-        <select id="service" required>
-            <option value="Straight Blade Pickup">Straight Blade Pickup</option>
-            <option value="Plow truck w/ Bulk Spreader">Plow truck w/ Bulk Spreader</option>
-            <option value="High Efficiency Plow w/ Bulk Spreader">High Efficiency Plow w/ Bulk Spreader</option>
-            <option value="Large Plow Truck 4+yrd Bulk Spreader">Large Plow Truck 4+yrd Bulk Spreader</option>
-            <option value="Sidewalk Plow">Sidewalk Plow</option>
-            <option value="Tractor small">Tractor small</option>
-            <option value="Loader no box">Loader no box</option>
-            <option value="Loader Box >10ft">Loader Box >10ft</option>
-            <option value="Loader Box 11ft+">Loader Box 11ft+</option>
-            <option value="Sidewalk Snow Blower">Sidewalk Snow Blower</option>
-            <option value="Sidewalk Shovel">Sidewalk Shovel</option>
-        </select>
+        <label for="worker">Worker Name (Last, First)</label>
+        <input type="text" id="worker" placeholder="Doe, John" required>
+
+        <label for="service">Equipment</label>
+        <select id="service" required></select>
 
         <label for="time_in">Time In</label>
         <input type="datetime-local" id="time_in" required>
@@ -113,16 +104,9 @@
     <script>
         document.addEventListener('DOMContentLoaded', () => {
             fetchProperties();
-            populateSubcontractorName();
+            fetchContractors();
+            fetchEquipment();
         });
-
-        function populateSubcontractorName() {
-            const token = localStorage.getItem('token');
-            if (token) {
-                const payload = JSON.parse(atob(token.split('.')[1]));
-                document.getElementById('subcontractor').value = payload.name;
-            }
-        }
 
         async function fetchProperties() {
             try {
@@ -142,40 +126,95 @@
             }
         }
 
+        async function fetchContractors() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${API_BASE_URL}/contractors/`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const contractors = await response.json();
+                const select = document.getElementById('contractor');
+
+                contractors.forEach(contractor => {
+                    const option = document.createElement('option');
+                    option.value = contractor.id;
+                    option.textContent = contractor.name;
+                    select.appendChild(option);
+                });
+
+                // Auto-select if user is a Manager
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                if (payload.role === 'Manager') {
+                    const userOption = Array.from(select.options).find(opt => opt.textContent === payload.name);
+                    if (userOption) userOption.selected = true;
+                }
+            } catch (error) {
+                console.error('Failed to load contractors:', error);
+                alert('Could not load contractors. Check console.');
+            }
+        }
+
+        async function fetchEquipment() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${API_BASE_URL}/equipment-rates/`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const equipment = await response.json();
+                const select = document.getElementById('service');
+
+                equipment.forEach(eq => {
+                    const option = document.createElement('option');
+                    option.value = eq.equipment_name;
+                    option.textContent = `${eq.equipment_name} ($${eq.hourly_rate}/hr)`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load equipment:', error);
+                alert('Could not load equipment. Check console.');
+            }
+        }
+
         async function submitWinterOpsLog() {
             const token = localStorage.getItem('token');
-        const payload = JSON.parse(atob(token.split('.')[1]));
+            const contractorSelect = document.getElementById('contractor');
+            const selectedContractor = contractorSelect.options[contractorSelect.selectedIndex];
 
-        const data = {
-            property_id: parseInt(document.getElementById('property').value),
-            subcontractor_name: payload.name,
-            equipment: document.getElementById('service').value,
-            time_in: document.getElementById('time_in').value,
-            time_out: document.getElementById('time_out').value,
-            bulk_salt_qty: parseFloat(document.getElementById('bulk_salt_qty').value),
-            bag_salt_qty: parseFloat(document.getElementById('bag_salt_qty').value),
-            calcium_chloride_qty: parseFloat(document.getElementById('calcium_chloride_qty').value),
-            customer_provided: document.getElementById('customer_provided').value === 'true',
-            notes: document.getElementById('notes').value
-        };
+            const data = {
+                property_id: parseInt(document.getElementById('property').value),
+                contractor_id: parseInt(contractorSelect.value),
+                contractor_name: selectedContractor.textContent,
+                worker_name: document.getElementById('worker').value,
+                equipment: document.getElementById('service').value,
+                time_in: document.getElementById('time_in').value,
+                time_out: document.getElementById('time_out').value,
+                bulk_salt_qty: parseFloat(document.getElementById('bulk_salt_qty').value),
+                bag_salt_qty: parseFloat(document.getElementById('bag_salt_qty').value),
+                calcium_chloride_qty: parseFloat(document.getElementById('calcium_chloride_qty').value),
+                customer_provided: document.getElementById('customer_provided').value === 'true',
+                notes: document.getElementById('notes').value
+            };
 
-        try {
-            const response = await fetch(`${API_BASE_URL}/submit-winter-log/`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify(data)
-            });
+            try {
+                const response = await fetch(`${API_BASE_URL}/submit-winter-log/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
 
-            if (!response.ok) throw new Error(`Server error: ${response.status}`);
+                if (!response.ok) throw new Error(`Server error: ${response.status}`);
 
-            const result = await response.json();
-            alert(result.message || 'Winter Ops Log submitted!');
-            window.location.reload();
-        } catch (error) {
-            console.error('Error submitting log:', error);
-            alert('Failed to submit log. Check console.');
+                const result = await response.json();
+                alert(result.message || 'Winter Ops Log submitted!');
+                window.location.reload();
+            } catch (error) {
+                console.error('Error submitting log:', error);
+                alert('Failed to submit log. Check console.');
+            }
         }
-    }
 
         function checkAccess(allowedRoles) {
             const token = localStorage.getItem('token');
