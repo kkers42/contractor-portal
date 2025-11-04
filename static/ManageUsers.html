@@ -68,7 +68,7 @@
         }
     </style>
 </head>
-<body onload="checkAccess(['Admin']); fetchUsers();">
+<body onload="checkAccess(['Admin']); fetchUsers(); fetchContractors();">
 
 <h2>Manage Users</h2>
 
@@ -80,6 +80,7 @@
             <th>Phone</th>
             <th>Email</th>
             <th>Role</th>
+            <th>Contractor</th>
             <th>Actions</th>
         </tr>
     </thead>
@@ -96,11 +97,17 @@
     <label>Email:</label>
     <input type="email" id="email">
     <label>Role:</label>
-    <select id="role">
+    <select id="role" onchange="toggleContractorField()">
         <option value="Admin">Admin</option>
         <option value="Manager">Manager</option>
         <option value="Subcontractor" selected>Subcontractor</option>
     </select>
+    <div id="contractorField" style="display: block;">
+        <label>Assigned Contractor:</label>
+        <select id="contractor_id">
+            <option value="">-- Select Contractor --</option>
+        </select>
+    </div>
     <label>Password:</label>
     <input type="password" id="password">
     <button onclick="submitUser()">Submit User</button>
@@ -120,6 +127,7 @@ async function fetchUsers() {
     const tableBody = document.querySelector('#usersTable tbody');
     tableBody.innerHTML = '';
     users.forEach(user => {
+        const contractorName = user.contractor_name || 'N/A';
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${user.id}</td>
@@ -127,8 +135,9 @@ async function fetchUsers() {
             <td>${user.phone}</td>
             <td>${user.email}</td>
             <td>${user.role}</td>
+            <td>${contractorName}</td>
             <td>
-                <button onclick="editUser(${user.id}, '${user.name}', '${user.phone}', '${user.email}', '${user.role}')">Edit</button>
+                <button onclick="editUser(${user.id}, '${user.name}', '${user.phone}', '${user.email}', '${user.role}', ${user.contractor_id || 'null'})">Edit</button>
                 <button onclick="deleteUser(${user.id})">Delete</button>
                 <button onclick="resetPasswordInline('${user.email}')">Reset Password</button>
             </td>
@@ -137,23 +146,33 @@ async function fetchUsers() {
     });
 }
 
-function editUser(id, name, phone, email, role) {
+function editUser(id, name, phone, email, role, contractorId) {
     document.getElementById('user_id').value = id;
     document.getElementById('name').value = name;
     document.getElementById('phone').value = phone;
     document.getElementById('email').value = email;
     document.getElementById('role').value = role;
+    document.getElementById('contractor_id').value = contractorId || '';
+    toggleContractorField();
 }
 
 async function submitUser() {
     const userId = document.getElementById('user_id').value;
+    const role = document.getElementById('role').value;
+    const contractorId = document.getElementById('contractor_id').value;
+
     const user = {
         name: document.getElementById('name').value,
         phone: document.getElementById('phone').value,
         email: document.getElementById('email').value,
-        role: document.getElementById('role').value,
+        role: role,
         password: document.getElementById('password').value
     };
+
+    // Only include contractor_id for Subcontractors
+    if (role === 'Subcontractor' && contractorId) {
+        user.contractor_id = parseInt(contractorId);
+    }
 
     let url = `${API_BASE_URL}/add-user/`;
     let method = 'POST';
@@ -180,10 +199,44 @@ async function submitUser() {
         document.getElementById('phone').value = '';
         document.getElementById('email').value = '';
         document.getElementById('role').value = 'Subcontractor';
+        document.getElementById('contractor_id').value = '';
         document.getElementById('password').value = '';
+        toggleContractorField();
         fetchUsers();
     } else {
         alert('Failed to save user.');
+    }
+}
+
+async function fetchContractors() {
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_BASE_URL}/contractors/`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+        const contractors = await response.json();
+        const select = document.getElementById('contractor_id');
+
+        contractors.forEach(contractor => {
+            const option = document.createElement('option');
+            option.value = contractor.id;
+            option.textContent = contractor.name;
+            select.appendChild(option);
+        });
+    } catch (error) {
+        console.error('Failed to load contractors:', error);
+    }
+}
+
+function toggleContractorField() {
+    const role = document.getElementById('role').value;
+    const contractorField = document.getElementById('contractorField');
+
+    if (role === 'Subcontractor') {
+        contractorField.style.display = 'block';
+    } else {
+        contractorField.style.display = 'none';
+        document.getElementById('contractor_id').value = '';
     }
 }
 
