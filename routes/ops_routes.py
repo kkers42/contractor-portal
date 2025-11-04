@@ -60,7 +60,9 @@ def get_winter_logs():
 # --- Green Ops Model ---
 class GreenOpsLog(BaseModel):
     property_id: int
-    subcontractor_name: str
+    contractor_id: int
+    contractor_name: str
+    worker_name: str  # The subcontractor/worker (Last, First)
     time_in: str
     time_out: str
     service_type: str
@@ -72,12 +74,14 @@ class GreenOpsLog(BaseModel):
 def submit_green_log(log: GreenOpsLog):
     query = """
         INSERT INTO green_services_logs
-        (property_id, subcontractor_name, time_in, time_out, service_type, products_used, quantity_used, notes)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s)
+        (property_id, contractor_id, contractor_name, worker_name, time_in, time_out, service_type, products_used, quantity_used, notes)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     values = (
         log.property_id,
-        log.subcontractor_name,
+        log.contractor_id,
+        log.contractor_name,
+        log.worker_name,
         log.time_in,
         log.time_out,
         log.service_type,
@@ -92,7 +96,8 @@ def submit_green_log(log: GreenOpsLog):
 def get_green_logs():
     query = """
         SELECT
-            g.id, l.name AS property_name, g.subcontractor_name,
+            g.id, l.name AS property_name,
+            g.contractor_id, g.contractor_name, g.worker_name,
             g.time_in, g.time_out, g.service_type, g.products_used,
             g.quantity_used, g.notes
         FROM green_services_logs g
