@@ -177,6 +177,7 @@ def export_contractor_timesheets(filters: ReportFilters):
             TIMESTAMPDIFF(MINUTE, w.time_in, w.time_out) as total_minutes,
             TIMESTAMPDIFF(SECOND, w.time_in, w.time_out) / 3600 as hours,
             l.name as site,
+            w.equipment,
             w.bulk_salt_qty,
             w.bag_salt_qty,
             w.calcium_chloride_qty,
@@ -214,8 +215,8 @@ def export_contractor_timesheets(filters: ReportFilters):
 
                 # Create formatted dataframe
                 export_data = []
-                export_data.append(['Truck Rate $135/hr', '', '', '', f'Total Time {total_hours:.2f}'])
-                export_data.append(['Start Time', 'End Time', 'Total Min', 'HRS', 'Site', 'Qty Salt (yrd)'])
+                export_data.append(['Contractor:', contractor, '', '', '', f'Total Time: {total_hours:.2f} hrs'])
+                export_data.append(['Start Time', 'End Time', 'Total Min', 'HRS', 'Site', 'Equipment', 'Qty Salt (yrd)'])
 
                 for _, row in date_logs.iterrows():
                     start_time = pd.to_datetime(row['time_in']).strftime('%H%M')
@@ -226,6 +227,7 @@ def export_contractor_timesheets(filters: ReportFilters):
                         int(row['total_minutes']),
                         round(row['hours'], 2),
                         row['site'],
+                        row['equipment'] if row['equipment'] else '',
                         row['bulk_salt_qty'] if row['bulk_salt_qty'] else ''
                     ])
 
@@ -276,6 +278,7 @@ def export_property_logs(filters: ReportFilters):
             w.time_out,
             TIMESTAMPDIFF(MINUTE, w.time_in, w.time_out) as total_minutes,
             TIMESTAMPDIFF(SECOND, w.time_in, w.time_out) / 3600 as hours,
+            w.equipment,
             w.bulk_salt_qty,
             w.bag_salt_qty,
             w.calcium_chloride_qty,
@@ -307,8 +310,8 @@ def export_property_logs(filters: ReportFilters):
 
             # Create formatted dataframe
             export_data = []
-            export_data.append([f'Property: {property_name}', '', '', '', f'Total Hours: {total_hours:.2f}', f'Total Salt: {total_salt:.2f} yrd'])
-            export_data.append(['Date', 'Contractor', 'Start Time', 'End Time', 'Hours', 'Bulk Salt (yrd)', 'Bag Salt', 'Calcium', 'Notes'])
+            export_data.append([f'Property: {property_name}', '', '', '', '', f'Total Hours: {total_hours:.2f}', f'Total Salt: {total_salt:.2f} yrd'])
+            export_data.append(['Date', 'Contractor', 'Equipment', 'Start Time', 'End Time', 'Hours', 'Bulk Salt (yrd)', 'Bag Salt', 'Calcium', 'Notes'])
 
             for _, row in property_logs.iterrows():
                 work_date = pd.to_datetime(row['work_date']).strftime('%m/%d/%Y')
@@ -317,6 +320,7 @@ def export_property_logs(filters: ReportFilters):
                 export_data.append([
                     work_date,
                     row['subcontractor_name'],
+                    row['equipment'] if row['equipment'] else '',
                     start_time,
                     end_time,
                     round(row['hours'], 2),

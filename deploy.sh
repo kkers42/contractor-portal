@@ -36,7 +36,11 @@ echo "[6/7] Running product tables migration..."
 mysql -u contractor -p'Bimmer325!' contractor_portal < db/migrations/2025-11-03_create_product_tables.sql
 
 echo ""
-echo "[7/7] Restarting contractor-portal service..."
+echo "[7/8] Adding equipment field to winter_ops_logs..."
+mysql -u contractor -p'Bimmer325!' contractor_portal < db/migrations/2025-11-03_add_equipment_to_winter_ops.sql
+
+echo ""
+echo "[8/8] Restarting contractor-portal service..."
 sudo systemctl restart contractor-portal
 
 echo ""
