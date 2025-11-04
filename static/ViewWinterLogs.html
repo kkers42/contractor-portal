@@ -1,0 +1,349 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>View Winter Operations Logs</title>
+  <script src="/static/config.js"></script>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 10px;
+    }
+    .filters {
+      background-color: #000;
+      border: 1px solid #80ff80;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    .filter-row {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .filter-group {
+      flex: 1;
+      min-width: 200px;
+    }
+    .filter-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .filter-group select, .filter-group input {
+      width: 100%;
+      padding: 8px;
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      font-family: 'Courier New', monospace;
+    }
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+    .summary {
+      background-color: #003300;
+      border: 1px solid #80ff80;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    .summary-item {
+      flex: 1;
+      min-width: 150px;
+    }
+    .summary-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    .summary-value {
+      font-size: 24px;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #000;
+    }
+    th, td {
+      border: 1px solid #80ff80;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #111;
+      font-weight: bold;
+    }
+    tr:hover {
+      background-color: #002200;
+    }
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      font-size: 18px;
+      opacity: 0.6;
+    }
+  </style>
+</head>
+<body onload="initializePage()">
+  <h2>Winter Operations Logs</h2>
+
+  <div class="filters">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label>Property</label>
+        <select id="propertyFilter">
+          <option value="">All Properties</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Contractor</label>
+        <select id="contractorFilter">
+          <option value="">All Contractors</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Start Date</label>
+        <input type="date" id="startDate">
+      </div>
+      <div class="filter-group">
+        <label>End Date</label>
+        <input type="date" id="endDate">
+      </div>
+    </div>
+    <button class="btn" onclick="applyFilters()">Apply Filters</button>
+    <button class="btn" onclick="clearFilters()">Clear Filters</button>
+    <button class="btn" onclick="exportToExcel()">Export to Excel</button>
+  </div>
+
+  <div class="summary" id="summary" style="display: none;">
+    <div class="summary-item">
+      <div class="summary-label">Total Logs</div>
+      <div class="summary-value" id="totalLogs">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Total Hours</div>
+      <div class="summary-value" id="totalHours">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Bulk Salt (tons)</div>
+      <div class="summary-value" id="totalBulkSalt">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Bag Salt</div>
+      <div class="summary-value" id="totalBagSalt">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Calcium Chloride</div>
+      <div class="summary-value" id="totalCalcium">0</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Property</th>
+        <th>Contractor</th>
+        <th>Time In</th>
+        <th>Time Out</th>
+        <th>Hours</th>
+        <th>Bulk Salt</th>
+        <th>Bag Salt</th>
+        <th>Calcium</th>
+        <th>Customer Provided</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody id="logsTableBody">
+      <tr><td colspan="11" class="no-data">Loading logs...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    let allLogs = [];
+    let properties = [];
+    let contractors = new Set();
+
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager', 'Subcontractor']);
+      await Promise.all([fetchProperties(), fetchLogs()]);
+      populateFilters();
+    }
+
+    async function fetchProperties() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/properties/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        properties = await response.json();
+      } catch (err) {
+        console.error("Error fetching properties:", err);
+      }
+    }
+
+    async function fetchLogs() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-logs/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        allLogs = await response.json();
+
+        // Extract unique contractors
+        contractors = new Set(allLogs.map(log => log.subcontractor_name));
+
+        renderLogs(allLogs);
+      } catch (err) {
+        console.error("Error fetching logs:", err);
+        document.getElementById('logsTableBody').innerHTML =
+          '<tr><td colspan="11" class="no-data">Failed to load logs</td></tr>';
+      }
+    }
+
+    function populateFilters() {
+      // Populate property filter
+      const propertySelect = document.getElementById('propertyFilter');
+      properties.forEach(prop => {
+        const option = document.createElement('option');
+        option.value = prop.name;
+        option.textContent = prop.name;
+        propertySelect.appendChild(option);
+      });
+
+      // Populate contractor filter
+      const contractorSelect = document.getElementById('contractorFilter');
+      contractors.forEach(contractor => {
+        const option = document.createElement('option');
+        option.value = contractor;
+        option.textContent = contractor;
+        contractorSelect.appendChild(option);
+      });
+    }
+
+    function applyFilters() {
+      const propertyFilter = document.getElementById('propertyFilter').value;
+      const contractorFilter = document.getElementById('contractorFilter').value;
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      let filtered = allLogs.filter(log => {
+        if (propertyFilter && log.property_name !== propertyFilter) return false;
+        if (contractorFilter && log.subcontractor_name !== contractorFilter) return false;
+
+        if (startDate) {
+          const logDate = new Date(log.time_in).toISOString().split('T')[0];
+          if (logDate < startDate) return false;
+        }
+
+        if (endDate) {
+          const logDate = new Date(log.time_in).toISOString().split('T')[0];
+          if (logDate > endDate) return false;
+        }
+
+        return true;
+      });
+
+      renderLogs(filtered);
+    }
+
+    function clearFilters() {
+      document.getElementById('propertyFilter').value = '';
+      document.getElementById('contractorFilter').value = '';
+      document.getElementById('startDate').value = '';
+      document.getElementById('endDate').value = '';
+      renderLogs(allLogs);
+    }
+
+    function renderLogs(logs) {
+      const tbody = document.getElementById('logsTableBody');
+
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">No logs found</td></tr>';
+        document.getElementById('summary').style.display = 'none';
+        return;
+      }
+
+      // Calculate totals
+      let totalHours = 0;
+      let totalBulkSalt = 0;
+      let totalBagSalt = 0;
+      let totalCalcium = 0;
+
+      tbody.innerHTML = logs.map(log => {
+        const timeIn = new Date(log.time_in);
+        const timeOut = new Date(log.time_out);
+        const hours = ((timeOut - timeIn) / 1000 / 3600).toFixed(2);
+
+        totalHours += parseFloat(hours);
+        totalBulkSalt += parseFloat(log.bulk_salt_qty || 0);
+        totalBagSalt += parseFloat(log.bag_salt_qty || 0);
+        totalCalcium += parseFloat(log.calcium_chloride_qty || 0);
+
+        return `
+          <tr>
+            <td>${timeIn.toLocaleDateString()}</td>
+            <td>${log.property_name}</td>
+            <td>${log.subcontractor_name}</td>
+            <td>${timeIn.toLocaleTimeString()}</td>
+            <td>${timeOut.toLocaleTimeString()}</td>
+            <td>${hours}</td>
+            <td>${log.bulk_salt_qty || 0}</td>
+            <td>${log.bag_salt_qty || 0}</td>
+            <td>${log.calcium_chloride_qty || 0}</td>
+            <td>${log.customer_provided ? 'Yes' : 'No'}</td>
+            <td>${log.notes || ''}</td>
+          </tr>
+        `;
+      }).join('');
+
+      // Update summary
+      document.getElementById('summary').style.display = 'flex';
+      document.getElementById('totalLogs').textContent = logs.length;
+      document.getElementById('totalHours').textContent = totalHours.toFixed(2);
+      document.getElementById('totalBulkSalt').textContent = totalBulkSalt.toFixed(2);
+      document.getElementById('totalBagSalt').textContent = totalBagSalt;
+      document.getElementById('totalCalcium').textContent = totalCalcium;
+    }
+
+    function exportToExcel() {
+      alert('Export to Excel feature coming soon!');
+    }
+
+    function checkAccess(allowedRoles) {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/static/login.html';
+        return;
+      }
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const role = payload.role;
+      if (!allowedRoles.includes(role)) {
+        alert("Access denied.");
+        window.location.href = '/static/login.html';
+      }
+    }
+  </script>
+</body>
+</html>
