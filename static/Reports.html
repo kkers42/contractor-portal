@@ -1,198 +1,389 @@
 <!DOCTYPE html>
 <html>
 <head>
-    <title>Reports</title>
-    <script src="/static/config.js"></script>
-    <style>
-        body {
-            font-family: 'Courier New', monospace;
-            background: #1a1a1a;
-            color: #80ff80;
-            padding: 20px;
-        }
-        .container {
-            background: #000;
-            padding: 20px;
-            border-radius: 8px;
-            max-width: 900px;
-            margin: auto;
-            box-shadow: 0 0 10px rgba(0,255,0,0.2);
-            border: 1px solid #80ff80;
-        }
-        h2 {
-            text-align: center;
-            border-bottom: 1px solid #80ff80;
-            padding-bottom: 10px;
-        }
-        label {
-            display: block;
-            margin-top: 10px;
-        }
-        select, input {
-            width: 100%;
-            padding: 10px;
-            margin-top: 5px;
-            background-color: #000;
-            color: #80ff80;
-            border: 1px solid #80ff80;
-        }
-        input::placeholder {
-            color: #80ff80;
-            opacity: 0.6;
-        }
-        button {
-            margin-top: 15px;
-            padding: 10px 20px;
-            cursor: pointer;
-            background-color: #000;
-            color: #80ff80;
-            border: 1px solid #80ff80;
-            font-family: 'Courier New', monospace;
-        }
-        button:hover {
-            background-color: #004400;
-            border-color: #00cc00;
-        }
-        table {
-            width: 100%;
-            margin-top: 20px;
-            border-collapse: collapse;
-            background-color: #000;
-        }
-        th, td {
-            border: 1px solid #80ff80;
-            padding: 8px;
-            text-align: center;
-        }
-        th {
-            background-color: #111;
-        }
-    </style>
+  <title>Winter Operations Reports</title>
+  <script src="/static/config.js"></script>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 10px;
+    }
+    .filters {
+      background-color: #000;
+      border: 1px solid #80ff80;
+      padding: 20px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+    }
+    .filter-row {
+      display: flex;
+      gap: 15px;
+      margin-bottom: 15px;
+      flex-wrap: wrap;
+    }
+    .filter-group {
+      flex: 1;
+      min-width: 200px;
+    }
+    .filter-group label {
+      display: block;
+      margin-bottom: 5px;
+      font-weight: bold;
+    }
+    .filter-group select, .filter-group input {
+      width: 100%;
+      padding: 8px;
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      font-family: 'Courier New', monospace;
+    }
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      margin-right: 10px;
+    }
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+    .summary {
+      background-color: #003300;
+      border: 1px solid #80ff80;
+      padding: 15px;
+      margin-bottom: 20px;
+      border-radius: 5px;
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    .summary-item {
+      flex: 1;
+      min-width: 150px;
+    }
+    .summary-label {
+      font-size: 12px;
+      opacity: 0.8;
+    }
+    .summary-value {
+      font-size: 24px;
+      font-weight: bold;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      background-color: #000;
+    }
+    th, td {
+      border: 1px solid #80ff80;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #111;
+      font-weight: bold;
+    }
+    tr:hover {
+      background-color: #002200;
+    }
+    .no-data {
+      text-align: center;
+      padding: 40px;
+      font-size: 18px;
+      opacity: 0.6;
+    }
+  </style>
 </head>
-<body onload="checkAccess(['Admin', 'Manager', 'Subcontractor'])">
-    <div class="container">
-        <h2>Service & Product Reports</h2>
+<body onload="initializePage()">
+  <h2>Winter Operations Reports - Billing & Timesheets</h2>
 
-        <label for="reportType">Report Type</label>
-        <select id="reportType">
-            <option value="product">By Product</option>
-            <option value="property">By Property</option>
-            <option value="user">By User</option>
+  <div class="filters">
+    <div class="filter-row">
+      <div class="filter-group">
+        <label>Property</label>
+        <select id="propertyFilter">
+          <option value="">All Properties</option>
         </select>
-
-        <label for="startDate">Start Date</label>
+      </div>
+      <div class="filter-group">
+        <label>Contractor</label>
+        <select id="contractorFilter">
+          <option value="">All Contractors</option>
+        </select>
+      </div>
+      <div class="filter-group">
+        <label>Start Date</label>
         <input type="date" id="startDate">
-
-        <label for="endDate">End Date</label>
+      </div>
+      <div class="filter-group">
+        <label>End Date</label>
         <input type="date" id="endDate">
-
-        <label for="propertyId">Property ID (optional)</label>
-        <input type="number" id="propertyId">
-
-        <label for="userId">User ID (optional)</label>
-        <input type="number" id="userId">
-
-        <button onclick="generateReport()">Generate Report</button>
-        <button onclick="exportCSV()">Export CSV</button>
-        <button onclick="window.print()">Print</button>
-
-        <table id="reportTable">
-            <thead id="tableHead"></thead>
-            <tbody id="tableBody"></tbody>
-        </table>
+      </div>
     </div>
+    <button class="btn" onclick="applyFilters()">Apply Filters</button>
+    <button class="btn" onclick="clearFilters()">Clear Filters</button>
+    <button class="btn" onclick="exportToExcel()">Export to Excel</button>
+  </div>
 
-    <script>
-    function checkAccess(allowedRoles) {
-        const token = localStorage.getItem('token');
-        if (!token) {
-            window.location.href = '/static/login.html';
-            return;
-        }
-        const payload = JSON.parse(atob(token.split('.')[1]));
-        const role = payload.role;
-        if (!allowedRoles.includes(role)) {
-            alert("Access denied.");
-            window.location.href = '/static/login.html';
-        }
+  <div class="summary" id="summary" style="display: none;">
+    <div class="summary-item">
+      <div class="summary-label">Total Logs</div>
+      <div class="summary-value" id="totalLogs">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Total Hours</div>
+      <div class="summary-value" id="totalHours">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Bulk Salt (tons)</div>
+      <div class="summary-value" id="totalBulkSalt">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Bag Salt</div>
+      <div class="summary-value" id="totalBagSalt">0</div>
+    </div>
+    <div class="summary-item">
+      <div class="summary-label">Calcium Chloride</div>
+      <div class="summary-value" id="totalCalcium">0</div>
+    </div>
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Property</th>
+        <th>Contractor</th>
+        <th>Time In</th>
+        <th>Time Out</th>
+        <th>Hours</th>
+        <th>Bulk Salt</th>
+        <th>Bag Salt</th>
+        <th>Calcium</th>
+        <th>Customer Provided</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody id="logsTableBody">
+      <tr><td colspan="11" class="no-data">Loading logs...</td></tr>
+    </tbody>
+  </table>
+
+  <script>
+    let allLogs = [];
+    let properties = [];
+    let contractors = new Set();
+
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager', 'Subcontractor']);
+      await Promise.all([fetchProperties(), fetchLogs()]);
+      populateFilters();
     }
 
-    async function generateReport() {
-        const type = document.getElementById('reportType').value;
-        const start = document.getElementById('startDate').value;
-        const end = document.getElementById('endDate').value;
-        const propertyId = document.getElementById('propertyId').value;
-        const userId = document.getElementById('userId').value;
-
-        const token = localStorage.getItem('token');
-
-        const payload = {
-            start_date: start || null,
-            end_date: end || null
-        };
-
-        if (type === 'user' && userId) {
-            payload.user_id = parseInt(userId);
-        } else if (type === 'property' && propertyId) {
-            payload.property_id = parseInt(propertyId);
-        }
-
-
-        const response = await fetch(`${API_BASE_URL}/report/by-${type}/`, {
-            method: 'POST',
-            headers: {
-                'Content-Type': 'application/json',
-                'Authorization': 'Bearer ' + token
-            },
-            body: JSON.stringify(payload)
+    async function fetchProperties() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/properties/`, {
+          headers: { "Authorization": `Bearer ${token}` }
         });
-
-        const data = await response.json() || [];
-        if (!Array.isArray(data)) {
-            throw new Error("Invalid response structure");
-        }
-        renderTable(data);
+        properties = await response.json();
+      } catch (err) {
+        console.error("Error fetching properties:", err);
+      }
     }
 
-    function renderTable(data) {
-        const tableHead = document.getElementById('tableHead');
-        const tableBody = document.getElementById('tableBody');
-
-        tableHead.innerHTML = '';
-        tableBody.innerHTML = '';
-
-        if (!data.length) {
-            tableBody.innerHTML = '<tr><td colspan="10">No data found.</td></tr>';
-            return;
-        }
-
-        const headers = Object.keys(data[0]);
-        const headRow = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
-        tableHead.innerHTML = headRow;
-
-        data.forEach(row => {
-            const rowHTML = `<tr>${headers.map(h => `<td>${row[h]}</td>`).join('')}</tr>`;
-            tableBody.innerHTML += rowHTML;
+    async function fetchLogs() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-logs/`, {
+          headers: { "Authorization": `Bearer ${token}` }
         });
+        allLogs = await response.json();
+
+        // Extract unique contractors
+        contractors = new Set(allLogs.map(log => log.subcontractor_name));
+
+        renderLogs(allLogs);
+      } catch (err) {
+        console.error("Error fetching logs:", err);
+        document.getElementById('logsTableBody').innerHTML =
+          '<tr><td colspan="11" class="no-data">Failed to load logs</td></tr>';
+      }
     }
 
-    function exportCSV() {
-        const rows = document.querySelectorAll('table tr');
-        let csv = '';
-        rows.forEach(row => {
-            const cols = row.querySelectorAll('td, th');
-            const values = Array.from(cols).map(col => `"${col.innerText}"`).join(',');
-            csv += values + '\n';
+    function populateFilters() {
+      // Populate property filter
+      const propertySelect = document.getElementById('propertyFilter');
+      properties.forEach(prop => {
+        const option = document.createElement('option');
+        option.value = prop.name;
+        option.textContent = prop.name;
+        propertySelect.appendChild(option);
+      });
+
+      // Populate contractor filter
+      const contractorSelect = document.getElementById('contractorFilter');
+      contractors.forEach(contractor => {
+        const option = document.createElement('option');
+        option.value = contractor;
+        option.textContent = contractor;
+        contractorSelect.appendChild(option);
+      });
+    }
+
+    function applyFilters() {
+      const propertyFilter = document.getElementById('propertyFilter').value;
+      const contractorFilter = document.getElementById('contractorFilter').value;
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      let filtered = allLogs.filter(log => {
+        if (propertyFilter && log.property_name !== propertyFilter) return false;
+        if (contractorFilter && log.subcontractor_name !== contractorFilter) return false;
+
+        if (startDate) {
+          const logDate = new Date(log.time_in).toISOString().split('T')[0];
+          if (logDate < startDate) return false;
+        }
+
+        if (endDate) {
+          const logDate = new Date(log.time_in).toISOString().split('T')[0];
+          if (logDate > endDate) return false;
+        }
+
+        return true;
+      });
+
+      renderLogs(filtered);
+    }
+
+    function clearFilters() {
+      document.getElementById('propertyFilter').value = '';
+      document.getElementById('contractorFilter').value = '';
+      document.getElementById('startDate').value = '';
+      document.getElementById('endDate').value = '';
+      renderLogs(allLogs);
+    }
+
+    function renderLogs(logs) {
+      const tbody = document.getElementById('logsTableBody');
+
+      if (logs.length === 0) {
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">No logs found</td></tr>';
+        document.getElementById('summary').style.display = 'none';
+        return;
+      }
+
+      // Calculate totals
+      let totalHours = 0;
+      let totalBulkSalt = 0;
+      let totalBagSalt = 0;
+      let totalCalcium = 0;
+
+      tbody.innerHTML = logs.map(log => {
+        const timeIn = new Date(log.time_in);
+        const timeOut = new Date(log.time_out);
+        const hours = ((timeOut - timeIn) / 1000 / 3600).toFixed(2);
+
+        totalHours += parseFloat(hours);
+        totalBulkSalt += parseFloat(log.bulk_salt_qty || 0);
+        totalBagSalt += parseFloat(log.bag_salt_qty || 0);
+        totalCalcium += parseFloat(log.calcium_chloride_qty || 0);
+
+        return `
+          <tr>
+            <td>${timeIn.toLocaleDateString()}</td>
+            <td>${log.property_name}</td>
+            <td>${log.subcontractor_name}</td>
+            <td>${timeIn.toLocaleTimeString()}</td>
+            <td>${timeOut.toLocaleTimeString()}</td>
+            <td>${hours}</td>
+            <td>${log.bulk_salt_qty || 0}</td>
+            <td>${log.bag_salt_qty || 0}</td>
+            <td>${log.calcium_chloride_qty || 0}</td>
+            <td>${log.customer_provided ? 'Yes' : 'No'}</td>
+            <td>${log.notes || ''}</td>
+          </tr>
+        `;
+      }).join('');
+
+      // Update summary
+      document.getElementById('summary').style.display = 'flex';
+      document.getElementById('totalLogs').textContent = logs.length;
+      document.getElementById('totalHours').textContent = totalHours.toFixed(2);
+      document.getElementById('totalBulkSalt').textContent = totalBulkSalt.toFixed(2);
+      document.getElementById('totalBagSalt').textContent = totalBagSalt;
+      document.getElementById('totalCalcium').textContent = totalCalcium;
+    }
+
+    async function exportToExcel() {
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (!startDate || !endDate) {
+        alert('Please select both start and end dates for the export.');
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/export/contractor-timesheets/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            start_date: startDate,
+            end_date: endDate
+          })
         });
 
-        const blob = new Blob([csv], { type: 'text/csv' });
+        if (!response.ok) {
+          throw new Error(`Export failed: ${response.status} ${response.statusText}`);
+        }
+
+        // Download the file
+        const blob = await response.blob();
         const url = URL.createObjectURL(blob);
         const a = document.createElement('a');
         a.href = url;
-        a.download = 'report.csv';
+        a.download = `contractor_timesheets_${startDate}_${endDate}.xlsx`;
+        document.body.appendChild(a);
         a.click();
+        document.body.removeChild(a);
         URL.revokeObjectURL(url);
+      } catch (err) {
+        console.error("Error exporting to Excel:", err);
+        alert('Failed to export to Excel. Please check the console for details.');
+      }
     }
-    </script>
+
+    function checkAccess(allowedRoles) {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/static/login.html';
+        return;
+      }
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const role = payload.role;
+      if (!allowedRoles.includes(role)) {
+        alert("Access denied.");
+        window.location.href = '/static/login.html';
+      }
+    }
+  </script>
 </body>
 </html>
