@@ -165,6 +165,7 @@
         <th>Date</th>
         <th>Property</th>
         <th>Contractor</th>
+        <th>Worker</th>
         <th>Service Type</th>
         <th>Time In</th>
         <th>Time Out</th>
@@ -175,7 +176,7 @@
       </tr>
     </thead>
     <tbody id="logsTableBody">
-      <tr><td colspan="10" class="no-data">Loading logs...</td></tr>
+      <tr><td colspan="11" class="no-data">Loading logs...</td></tr>
     </tbody>
   </table>
 
@@ -212,14 +213,14 @@
         allLogs = await response.json();
 
         // Extract unique contractors and service types
-        contractors = new Set(allLogs.map(log => log.subcontractor_name));
+        contractors = new Set(allLogs.map(log => log.contractor_name).filter(Boolean));
         serviceTypes = new Set(allLogs.map(log => log.service_type));
 
         renderLogs(allLogs);
       } catch (err) {
         console.error("Error fetching logs:", err);
         document.getElementById('logsTableBody').innerHTML =
-          '<tr><td colspan="10" class="no-data">Failed to load logs</td></tr>';
+          '<tr><td colspan="11" class="no-data">Failed to load logs</td></tr>';
       }
     }
 
@@ -261,7 +262,7 @@
 
       let filtered = allLogs.filter(log => {
         if (propertyFilter && log.property_name !== propertyFilter) return false;
-        if (contractorFilter && log.subcontractor_name !== contractorFilter) return false;
+        if (contractorFilter && log.contractor_name !== contractorFilter) return false;
         if (serviceFilter && log.service_type !== serviceFilter) return false;
 
         if (startDate) {
@@ -293,7 +294,7 @@
       const tbody = document.getElementById('logsTableBody');
 
       if (logs.length === 0) {
-        tbody.innerHTML = '<tr><td colspan="10" class="no-data">No logs found</td></tr>';
+        tbody.innerHTML = '<tr><td colspan="11" class="no-data">No logs found</td></tr>';
         document.getElementById('summary').style.display = 'none';
         return;
       }
@@ -314,7 +315,8 @@
           <tr>
             <td>${timeIn.toLocaleDateString()}</td>
             <td>${log.property_name}</td>
-            <td>${log.subcontractor_name}</td>
+            <td>${log.contractor_name || 'N/A'}</td>
+            <td>${log.worker_name || 'N/A'}</td>
             <td>${log.service_type}</td>
             <td>${timeIn.toLocaleTimeString()}</td>
             <td>${timeOut.toLocaleTimeString()}</td>

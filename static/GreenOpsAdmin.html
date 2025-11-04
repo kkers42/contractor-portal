@@ -66,7 +66,8 @@
       <tr>
         <th>ID</th>
         <th>Property</th>
-        <th>Subcontractor</th>
+        <th>Contractor</th>
+        <th>Worker</th>
         <th>Time In</th>
         <th>Time Out</th>
         <th>Total Time (Hrs)</th>
@@ -115,7 +116,8 @@
           row.innerHTML = `
             <td>${log.id}</td>
             <td>${log.property_name}</td>
-            <td>${log.subcontractor_name}</td>
+            <td>${log.contractor_name || 'N/A'}</td>
+            <td>${log.worker_name || 'N/A'}</td>
             <td>${log.time_in}</td>
             <td>${log.time_out}</td>
             <td>${totalHours}</td>
