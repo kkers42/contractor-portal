@@ -142,11 +142,16 @@
                     select.appendChild(option);
                 });
 
-                // Auto-select if user is a Manager
+                // Auto-select contractor and populate worker name based on role
                 const payload = JSON.parse(atob(token.split('.')[1]));
+
                 if (payload.role === 'Manager') {
+                    // Auto-select this manager as contractor
                     const userOption = Array.from(select.options).find(opt => opt.textContent === payload.name);
                     if (userOption) userOption.selected = true;
+                } else if (payload.role === 'Subcontractor') {
+                    // Auto-populate worker name with logged-in user's name
+                    document.getElementById('worker').value = payload.name;
                 }
             } catch (error) {
                 console.error('Failed to load contractors:', error);
