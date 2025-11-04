@@ -35,7 +35,7 @@ def report_by_product(filters: ReportFilters):
         params += [property_id, property_id]
 
     if user_id:
-        where_clauses.append("(gs.subcontractor_id = %s OR wl.subcontractor_name = (SELECT name FROM users WHERE id = %s))")
+        where_clauses.append("(gs.worker_name = (SELECT name FROM users WHERE id = %s) OR wl.worker_name = (SELECT name FROM users WHERE id = %s))")
         params += [user_id, user_id]
 
     where_sql = " AND ".join(where_clauses)
@@ -77,7 +77,7 @@ def report_by_property(filters: ReportFilters):
         conditions.append("l.id = %s")
         params.append(property_id)
     if user_id:
-        conditions.append("(w.subcontractor_name = (SELECT name FROM users WHERE id = %s) OR g.subcontractor_name = (SELECT name FROM users WHERE id = %s))")
+        conditions.append("(w.worker_name = (SELECT name FROM users WHERE id = %s) OR g.worker_name = (SELECT name FROM users WHERE id = %s))")
         params += [user_id, user_id]
 
     where_clause = " AND ".join(conditions)
@@ -121,7 +121,7 @@ def report_by_user(filters: ReportFilters):
         conditions.append("(w.property_id = %s OR g.property_id = %s)")
         params += [property_id, property_id]
     if user_id:
-        conditions.append("(w.subcontractor_name = (SELECT name FROM users WHERE id = %s) OR g.subcontractor_name = (SELECT name FROM users WHERE id = %s))")
+        conditions.append("(w.worker_name = (SELECT name FROM users WHERE id = %s) OR g.worker_name = (SELECT name FROM users WHERE id = %s))")
         params += [user_id, user_id]
 
     where_clause = " AND ".join(conditions)
@@ -130,7 +130,7 @@ def report_by_user(filters: ReportFilters):
 
     query = f"""
         SELECT
-            COALESCE(w.subcontractor_name, g.subcontractor_name) AS subcontractor,
+            COALESCE(w.worker_name, g.worker_name) AS subcontractor,
             COUNT(DISTINCT w.id) AS winter_logs,
             COUNT(DISTINCT g.id) AS green_logs,
             SUM(TIMESTAMPDIFF(SECOND, w.time_in, w.time_out) / 3600) AS winter_hours,
@@ -140,8 +140,8 @@ def report_by_user(filters: ReportFilters):
             SUM(w.calcium_chloride_qty) AS calcium_chloride,
             SUM(g.quantity_used) AS green_products_used
         FROM users u
-        LEFT JOIN winter_ops_logs w ON w.subcontractor_name = u.name
-        LEFT JOIN green_services_logs g ON g.subcontractor_name = u.name
+        LEFT JOIN winter_ops_logs w ON w.worker_name = u.name
+        LEFT JOIN green_services_logs g ON g.worker_name = u.name
         {where_clause}
         GROUP BY subcontractor
         ORDER BY subcontractor;
@@ -170,7 +170,7 @@ def export_contractor_timesheets(filters: ReportFilters):
     query = f"""
         SELECT
             w.id,
-            w.subcontractor_name,
+            w.worker_name,
             DATE(w.time_in) as work_date,
             w.time_in,
             w.time_out,
@@ -185,7 +185,7 @@ def export_contractor_timesheets(filters: ReportFilters):
         FROM winter_ops_logs w
         JOIN locations l ON w.property_id = l.id
         {where_clause}
-        ORDER BY w.subcontractor_name, w.time_in
+        ORDER BY w.worker_name, w.time_in
     """
 
     logs = fetch_query(query, params if params else None)
@@ -200,8 +200,8 @@ def export_contractor_timesheets(filters: ReportFilters):
     df = pd.DataFrame(logs)
 
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        for contractor in df['subcontractor_name'].unique():
-            contractor_logs = df[df['subcontractor_name'] == contractor]
+        for contractor in df['worker_name'].unique():
+            contractor_logs = df[df['worker_name'] == contractor]
 
             for work_date in contractor_logs['work_date'].unique():
                 date_logs = contractor_logs[contractor_logs['work_date'] == work_date]
@@ -272,7 +272,7 @@ def export_property_logs(filters: ReportFilters):
     query = f"""
         SELECT
             l.name as property_name,
-            w.subcontractor_name,
+            w.worker_name,
             DATE(w.time_in) as work_date,
             w.time_in,
             w.time_out,
@@ -319,7 +319,7 @@ def export_property_logs(filters: ReportFilters):
                 end_time = pd.to_datetime(row['time_out']).strftime('%H:%M')
                 export_data.append([
                     work_date,
-                    row['subcontractor_name'],
+                    row['worker_name'],
                     row['equipment'] if row['equipment'] else '',
                     start_time,
                     end_time,
