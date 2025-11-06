@@ -34,10 +34,12 @@ cd $APP_DIR
 echo -e "${YELLOW}[4/11] Cloning repository from GitHub...${NC}"
 if [ -d ".git" ]; then
     echo "Repository already exists, pulling latest changes..."
-    git pull origin feature/passwordless-sso
+    git fetch origin
+    git checkout beta
+    git pull origin beta
 else
     git clone https://github.com/kkers42/contractor-portal.git .
-    git checkout feature/passwordless-sso
+    git checkout beta
 fi
 
 echo -e "${YELLOW}[5/11] Setting up Python virtual environment...${NC}"
