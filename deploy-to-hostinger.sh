@@ -142,12 +142,20 @@ server {
 }
 EOF
 
-# Enable site
+# Enable site (without removing existing sites)
 ln -sf /etc/nginx/sites-available/contractor-portal /etc/nginx/sites-enabled/
-rm -f /etc/nginx/sites-enabled/default
+# Note: Not removing default or other sites to preserve existing apps like n8n
 
 # Test and reload Nginx
-nginx -t && systemctl reload nginx
+echo "Testing Nginx configuration..."
+if nginx -t; then
+    systemctl reload nginx
+    echo -e "${GREEN}Nginx reloaded successfully${NC}"
+else
+    echo -e "${RED}Nginx configuration test failed! Please check manually.${NC}"
+    echo "Your n8n and other existing sites should still be working."
+    exit 1
+fi
 
 echo ""
 echo -e "${GREEN}=========================================="
