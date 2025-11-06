@@ -364,6 +364,144 @@ async def handle_list_tools() -> list[Tool]:
                 "required": []
             }
         ),
+        Tool(
+            name="deploy_to_hostinger",
+            description="Deploy the contractor portal to Hostinger VPS via SSH. Automates the entire deployment process.",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vps_host": {
+                        "type": "string",
+                        "description": "VPS IP address or hostname"
+                    },
+                    "ssh_user": {
+                        "type": "string",
+                        "description": "SSH username (default: root)",
+                        "default": "root"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "description": "Domain name for the application"
+                    },
+                    "db_password": {
+                        "type": "string",
+                        "description": "MySQL database password to set"
+                    },
+                    "ssh_key_path": {
+                        "type": "string",
+                        "description": "Path to SSH private key (optional, uses default if not provided)"
+                    }
+                },
+                "required": ["vps_host", "domain", "db_password"]
+            }
+        ),
+        Tool(
+            name="check_deployment_status",
+            description="Check the status of the deployed application on Hostinger VPS",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vps_host": {
+                        "type": "string",
+                        "description": "VPS IP address or hostname"
+                    },
+                    "ssh_user": {
+                        "type": "string",
+                        "description": "SSH username (default: root)",
+                        "default": "root"
+                    }
+                },
+                "required": ["vps_host"]
+            }
+        ),
+        Tool(
+            name="configure_dns",
+            description="Generate DNS configuration instructions for Hostinger domain setup",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "description": "Domain name to configure"
+                    },
+                    "vps_ip": {
+                        "type": "string",
+                        "description": "VPS IP address to point domain to"
+                    }
+                },
+                "required": ["domain", "vps_ip"]
+            }
+        ),
+        Tool(
+            name="setup_ssl",
+            description="Set up SSL certificate via Let's Encrypt on the VPS",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vps_host": {
+                        "type": "string",
+                        "description": "VPS IP address or hostname"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "description": "Domain name for SSL certificate"
+                    },
+                    "ssh_user": {
+                        "type": "string",
+                        "description": "SSH username (default: root)",
+                        "default": "root"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Email address for Let's Encrypt notifications"
+                    }
+                },
+                "required": ["vps_host", "domain", "email"]
+            }
+        ),
+        Tool(
+            name="view_deployment_logs",
+            description="View application logs from the deployed VPS",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vps_host": {
+                        "type": "string",
+                        "description": "VPS IP address or hostname"
+                    },
+                    "ssh_user": {
+                        "type": "string",
+                        "description": "SSH username (default: root)",
+                        "default": "root"
+                    },
+                    "lines": {
+                        "type": "integer",
+                        "description": "Number of log lines to retrieve (default: 100)",
+                        "default": 100
+                    }
+                },
+                "required": ["vps_host"]
+            }
+        ),
+        Tool(
+            name="restart_application",
+            description="Restart the contractor portal application on VPS",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vps_host": {
+                        "type": "string",
+                        "description": "VPS IP address or hostname"
+                    },
+                    "ssh_user": {
+                        "type": "string",
+                        "description": "SSH username (default: root)",
+                        "default": "root"
+                    }
+                },
+                "required": ["vps_host"]
+            }
+        ),
     ]
 
 @server.call_tool()
@@ -573,6 +711,227 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
                 type="text",
                 text=json.dumps(results, indent=2)
             )]
+
+        elif name == "deploy_to_hostinger":
+            import subprocess
+            import tempfile
+
+            vps_host = arguments["vps_host"]
+            ssh_user = arguments.get("ssh_user", "root")
+            domain = arguments["domain"]
+            db_password = arguments["db_password"]
+            ssh_key_path = arguments.get("ssh_key_path", "")
+
+            # Build SSH command prefix
+            ssh_cmd = f"ssh {ssh_user}@{vps_host}"
+            if ssh_key_path:
+                ssh_cmd = f"ssh -i {ssh_key_path} {ssh_user}@{vps_host}"
+
+            # Create deployment script with custom values
+            deploy_script_url = "https://raw.githubusercontent.com/kkers42/contractor-portal/beta/deploy-to-hostinger.sh"
+
+            commands = [
+                f"{ssh_cmd} 'curl -sL {deploy_script_url} -o /tmp/deploy.sh'",
+                f"{ssh_cmd} 'sed -i \"s/DOMAIN=\\\"your-domain.com\\\"/DOMAIN=\\\"{domain}\\\"/\" /tmp/deploy.sh'",
+                f"{ssh_cmd} 'sed -i \"s/DB_PASS=\\\"Bimmer325!\\\"/DB_PASS=\\\"{db_password}\\\"/\" /tmp/deploy.sh'",
+                f"{ssh_cmd} 'chmod +x /tmp/deploy.sh'",
+                f"{ssh_cmd} 'bash /tmp/deploy.sh'",
+            ]
+
+            results = []
+            for cmd in commands:
+                try:
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=600)
+                    results.append({
+                        "command": cmd,
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "returncode": result.returncode
+                    })
+                except subprocess.TimeoutExpired:
+                    results.append({
+                        "command": cmd,
+                        "error": "Command timed out after 10 minutes"
+                    })
+                except Exception as e:
+                    results.append({
+                        "command": cmd,
+                        "error": str(e)
+                    })
+
+            return [TextContent(
+                type="text",
+                text=json.dumps(results, indent=2)
+            )]
+
+        elif name == "check_deployment_status":
+            import subprocess
+
+            vps_host = arguments["vps_host"]
+            ssh_user = arguments.get("ssh_user", "root")
+
+            ssh_cmd = f"ssh {ssh_user}@{vps_host}"
+
+            # Check various aspects of deployment
+            checks = {
+                "application_status": "systemctl status contractor-portal --no-pager",
+                "nginx_status": "systemctl status nginx --no-pager",
+                "mysql_status": "systemctl status mysql --no-pager",
+                "disk_space": "df -h /opt",
+                "recent_logs": "journalctl -u contractor-portal -n 20 --no-pager",
+                "listening_ports": "netstat -tlnp | grep -E ':(80|443|8080|3306)'",
+            }
+
+            results = {}
+            for check_name, command in checks.items():
+                try:
+                    full_cmd = f"{ssh_cmd} '{command}'"
+                    result = subprocess.run(full_cmd, shell=True, capture_output=True, text=True, timeout=30)
+                    results[check_name] = {
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "returncode": result.returncode
+                    }
+                except Exception as e:
+                    results[check_name] = {"error": str(e)}
+
+            return [TextContent(
+                type="text",
+                text=json.dumps(results, indent=2)
+            )]
+
+        elif name == "configure_dns":
+            domain = arguments["domain"]
+            vps_ip = arguments["vps_ip"]
+
+            instructions = {
+                "domain": domain,
+                "vps_ip": vps_ip,
+                "instructions": [
+                    "Log in to your Hostinger control panel",
+                    "Navigate to 'Domains' section",
+                    "Click on your domain: " + domain,
+                    "Go to 'DNS / Name Servers' tab",
+                    "Add or update the following DNS records:"
+                ],
+                "dns_records": [
+                    {
+                        "type": "A",
+                        "name": "@",
+                        "points_to": vps_ip,
+                        "ttl": 3600,
+                        "description": "Root domain"
+                    },
+                    {
+                        "type": "A",
+                        "name": "www",
+                        "points_to": vps_ip,
+                        "ttl": 3600,
+                        "description": "WWW subdomain"
+                    }
+                ],
+                "notes": [
+                    "DNS propagation can take 5-30 minutes",
+                    "You can check propagation with: dig " + domain,
+                    "Or use online tools like: whatsmydns.net",
+                    "Once DNS resolves, proceed with SSL setup"
+                ]
+            }
+
+            return [TextContent(
+                type="text",
+                text=json.dumps(instructions, indent=2)
+            )]
+
+        elif name == "setup_ssl":
+            import subprocess
+
+            vps_host = arguments["vps_host"]
+            domain = arguments["domain"]
+            ssh_user = arguments.get("ssh_user", "root")
+            email = arguments["email"]
+
+            ssh_cmd = f"ssh {ssh_user}@{vps_host}"
+
+            # Check DNS first
+            dns_check_cmd = f"dig +short {domain}"
+            try:
+                dns_result = subprocess.run(dns_check_cmd, shell=True, capture_output=True, text=True, timeout=10)
+                resolved_ip = dns_result.stdout.strip()
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"DNS check failed: {str(e)}. Make sure DNS is configured before setting up SSL."
+                )]
+
+            # Run certbot
+            certbot_cmd = f"{ssh_cmd} 'certbot --nginx -d {domain} -d www.{domain} --non-interactive --agree-tos --email {email} --redirect'"
+
+            try:
+                result = subprocess.run(certbot_cmd, shell=True, capture_output=True, text=True, timeout=300)
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "dns_resolved_to": resolved_ip,
+                        "certbot_stdout": result.stdout,
+                        "certbot_stderr": result.stderr,
+                        "returncode": result.returncode,
+                        "success": result.returncode == 0
+                    }, indent=2)
+                )]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"SSL setup failed: {str(e)}"
+                )]
+
+        elif name == "view_deployment_logs":
+            import subprocess
+
+            vps_host = arguments["vps_host"]
+            ssh_user = arguments.get("ssh_user", "root")
+            lines = arguments.get("lines", 100)
+
+            ssh_cmd = f"ssh {ssh_user}@{vps_host}"
+            log_cmd = f"{ssh_cmd} 'journalctl -u contractor-portal -n {lines} --no-pager'"
+
+            try:
+                result = subprocess.run(log_cmd, shell=True, capture_output=True, text=True, timeout=30)
+                return [TextContent(
+                    type="text",
+                    text=result.stdout if result.returncode == 0 else f"Error: {result.stderr}"
+                )]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Failed to retrieve logs: {str(e)}"
+                )]
+
+        elif name == "restart_application":
+            import subprocess
+
+            vps_host = arguments["vps_host"]
+            ssh_user = arguments.get("ssh_user", "root")
+
+            ssh_cmd = f"ssh {ssh_user}@{vps_host}"
+            restart_cmd = f"{ssh_cmd} 'systemctl restart contractor-portal && systemctl status contractor-portal --no-pager'"
+
+            try:
+                result = subprocess.run(restart_cmd, shell=True, capture_output=True, text=True, timeout=30)
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "stdout": result.stdout,
+                        "stderr": result.stderr,
+                        "returncode": result.returncode,
+                        "success": result.returncode == 0
+                    }, indent=2)
+                )]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Restart failed: {str(e)}"
+                )]
 
         else:
             raise ValueError(f"Unknown tool: {name}")
