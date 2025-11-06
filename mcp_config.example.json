@@ -6,7 +6,8 @@
         "r:\\Contractor App\\app\\contractor_mcp\\server.py"
       ],
       "env": {
-        "PYTHONUNBUFFERED": "1"
+        "PYTHONUNBUFFERED": "1",
+        "HOSTINGER_API_KEY": "your-hostinger-api-key-here"
       }
     }
   }

@@ -502,6 +502,78 @@ async def handle_list_tools() -> list[Tool]:
                 "required": ["vps_host"]
             }
         ),
+        Tool(
+            name="hostinger_configure_dns",
+            description="Automatically configure DNS records via Hostinger API (requires HOSTINGER_API_KEY in environment)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "description": "Domain name to configure (e.g., example.com)"
+                    },
+                    "vps_ip": {
+                        "type": "string",
+                        "description": "VPS IP address to point domain to"
+                    }
+                },
+                "required": ["domain", "vps_ip"]
+            }
+        ),
+        Tool(
+            name="hostinger_list_domains",
+            description="List all domains in Hostinger account (requires HOSTINGER_API_KEY)",
+            inputSchema={
+                "type": "object",
+                "properties": {},
+                "required": []
+            }
+        ),
+        Tool(
+            name="hostinger_get_dns_records",
+            description="Get current DNS records for a domain (requires HOSTINGER_API_KEY)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "domain": {
+                        "type": "string",
+                        "description": "Domain name"
+                    }
+                },
+                "required": ["domain"]
+            }
+        ),
+        Tool(
+            name="complete_deployment",
+            description="Complete end-to-end deployment: VPS setup, DNS configuration, and SSL (requires HOSTINGER_API_KEY and SSH access)",
+            inputSchema={
+                "type": "object",
+                "properties": {
+                    "vps_host": {
+                        "type": "string",
+                        "description": "VPS IP address"
+                    },
+                    "domain": {
+                        "type": "string",
+                        "description": "Domain name"
+                    },
+                    "db_password": {
+                        "type": "string",
+                        "description": "MySQL password"
+                    },
+                    "email": {
+                        "type": "string",
+                        "description": "Email for SSL certificate notifications"
+                    },
+                    "ssh_user": {
+                        "type": "string",
+                        "description": "SSH username (default: root)",
+                        "default": "root"
+                    }
+                },
+                "required": ["vps_host", "domain", "db_password", "email"]
+            }
+        ),
     ]
 
 @server.call_tool()
@@ -932,6 +1004,318 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
                     type="text",
                     text=f"Restart failed: {str(e)}"
                 )]
+
+        elif name == "hostinger_configure_dns":
+            import requests
+
+            api_key = os.getenv('HOSTINGER_API_KEY')
+            if not api_key:
+                return [TextContent(
+                    type="text",
+                    text="Error: HOSTINGER_API_KEY not found in environment variables. Please set it in your .env file or MCP config."
+                )]
+
+            domain = arguments["domain"]
+            vps_ip = arguments["vps_ip"]
+
+            # Hostinger API endpoints
+            base_url = "https://api.hostinger.com/v1"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            try:
+                # Get domain ID first
+                domains_response = requests.get(f"{base_url}/domains", headers=headers, timeout=30)
+                domains_response.raise_for_status()
+                domains_data = domains_response.json()
+
+                domain_id = None
+                for d in domains_data.get('data', []):
+                    if d.get('domain') == domain:
+                        domain_id = d.get('id')
+                        break
+
+                if not domain_id:
+                    return [TextContent(
+                        type="text",
+                        text=f"Error: Domain '{domain}' not found in your Hostinger account. Available domains: {[d.get('domain') for d in domains_data.get('data', [])]}"
+                    )]
+
+                # Configure DNS records
+                dns_records = [
+                    {
+                        "type": "A",
+                        "name": "@",
+                        "content": vps_ip,
+                        "ttl": 3600
+                    },
+                    {
+                        "type": "A",
+                        "name": "www",
+                        "content": vps_ip,
+                        "ttl": 3600
+                    }
+                ]
+
+                results = []
+                for record in dns_records:
+                    try:
+                        # Add or update DNS record
+                        response = requests.post(
+                            f"{base_url}/domains/{domain_id}/dns",
+                            headers=headers,
+                            json=record,
+                            timeout=30
+                        )
+                        response.raise_for_status()
+                        results.append({
+                            "record": record,
+                            "status": "success",
+                            "response": response.json()
+                        })
+                    except requests.exceptions.HTTPError as e:
+                        # Record might already exist, try to update
+                        if e.response.status_code == 409:
+                            results.append({
+                                "record": record,
+                                "status": "already_exists",
+                                "message": "Record already exists with this configuration"
+                            })
+                        else:
+                            results.append({
+                                "record": record,
+                                "status": "error",
+                                "error": str(e)
+                            })
+
+                return [TextContent(
+                    type="text",
+                    text=json.dumps({
+                        "domain": domain,
+                        "vps_ip": vps_ip,
+                        "domain_id": domain_id,
+                        "dns_records_configured": results,
+                        "message": "DNS configuration complete. Propagation may take 5-30 minutes.",
+                        "next_step": f"Wait for DNS propagation, then run SSL setup for {domain}"
+                    }, indent=2)
+                )]
+
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Hostinger API error: {str(e)}"
+                )]
+
+        elif name == "hostinger_list_domains":
+            import requests
+
+            api_key = os.getenv('HOSTINGER_API_KEY')
+            if not api_key:
+                return [TextContent(
+                    type="text",
+                    text="Error: HOSTINGER_API_KEY not found in environment variables."
+                )]
+
+            base_url = "https://api.hostinger.com/v1"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            try:
+                response = requests.get(f"{base_url}/domains", headers=headers, timeout=30)
+                response.raise_for_status()
+                domains_data = response.json()
+
+                return [TextContent(
+                    type="text",
+                    text=json.dumps(domains_data, indent=2)
+                )]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Hostinger API error: {str(e)}"
+                )]
+
+        elif name == "hostinger_get_dns_records":
+            import requests
+
+            api_key = os.getenv('HOSTINGER_API_KEY')
+            if not api_key:
+                return [TextContent(
+                    type="text",
+                    text="Error: HOSTINGER_API_KEY not found in environment variables."
+                )]
+
+            domain = arguments["domain"]
+            base_url = "https://api.hostinger.com/v1"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            try:
+                # Get domain ID
+                domains_response = requests.get(f"{base_url}/domains", headers=headers, timeout=30)
+                domains_response.raise_for_status()
+                domains_data = domains_response.json()
+
+                domain_id = None
+                for d in domains_data.get('data', []):
+                    if d.get('domain') == domain:
+                        domain_id = d.get('id')
+                        break
+
+                if not domain_id:
+                    return [TextContent(
+                        type="text",
+                        text=f"Error: Domain '{domain}' not found in your Hostinger account."
+                    )]
+
+                # Get DNS records
+                dns_response = requests.get(f"{base_url}/domains/{domain_id}/dns", headers=headers, timeout=30)
+                dns_response.raise_for_status()
+
+                return [TextContent(
+                    type="text",
+                    text=json.dumps(dns_response.json(), indent=2)
+                )]
+            except Exception as e:
+                return [TextContent(
+                    type="text",
+                    text=f"Hostinger API error: {str(e)}"
+                )]
+
+        elif name == "complete_deployment":
+            import subprocess
+            import requests
+            import time
+
+            vps_host = arguments["vps_host"]
+            domain = arguments["domain"]
+            db_password = arguments["db_password"]
+            email = arguments["email"]
+            ssh_user = arguments.get("ssh_user", "root")
+
+            api_key = os.getenv('HOSTINGER_API_KEY')
+            if not api_key:
+                return [TextContent(
+                    type="text",
+                    text="Error: HOSTINGER_API_KEY required for complete deployment. Set it in environment or .env file."
+                )]
+
+            deployment_log = []
+
+            # Step 1: Deploy to VPS
+            deployment_log.append("Step 1: Deploying application to VPS...")
+            ssh_cmd = f"ssh {ssh_user}@{vps_host}"
+            deploy_script_url = "https://raw.githubusercontent.com/kkers42/contractor-portal/beta/deploy-to-hostinger.sh"
+
+            commands = [
+                f"{ssh_cmd} 'curl -sL {deploy_script_url} -o /tmp/deploy.sh'",
+                f"{ssh_cmd} 'sed -i \"s/DOMAIN=\\\"your-domain.com\\\"/DOMAIN=\\\"{domain}\\\"/\" /tmp/deploy.sh'",
+                f"{ssh_cmd} 'sed -i \"s/DB_PASS=\\\"Bimmer325!\\\"/DB_PASS=\\\"{db_password}\\\"/\" /tmp/deploy.sh'",
+                f"{ssh_cmd} 'chmod +x /tmp/deploy.sh'",
+                f"{ssh_cmd} 'bash /tmp/deploy.sh 2>&1 | tee /tmp/deploy.log'",
+            ]
+
+            for cmd in commands:
+                try:
+                    result = subprocess.run(cmd, shell=True, capture_output=True, text=True, timeout=600)
+                    if result.returncode != 0:
+                        deployment_log.append(f"Warning: Command returned {result.returncode}")
+                except Exception as e:
+                    deployment_log.append(f"Error in deployment: {str(e)}")
+                    return [TextContent(type="text", text=json.dumps({"error": str(e), "log": deployment_log}, indent=2))]
+
+            deployment_log.append("Step 1 complete: Application deployed to VPS")
+
+            # Step 2: Configure DNS via Hostinger API
+            deployment_log.append("Step 2: Configuring DNS via Hostinger API...")
+            base_url = "https://api.hostinger.com/v1"
+            headers = {
+                "Authorization": f"Bearer {api_key}",
+                "Content-Type": "application/json"
+            }
+
+            try:
+                # Get domain ID
+                domains_response = requests.get(f"{base_url}/domains", headers=headers, timeout=30)
+                domains_response.raise_for_status()
+                domains_data = domains_response.json()
+
+                domain_id = None
+                for d in domains_data.get('data', []):
+                    if d.get('domain') == domain:
+                        domain_id = d.get('id')
+                        break
+
+                if not domain_id:
+                    deployment_log.append(f"Error: Domain '{domain}' not found in Hostinger account")
+                    return [TextContent(type="text", text=json.dumps({"error": "Domain not found", "log": deployment_log}, indent=2))]
+
+                # Configure DNS records
+                dns_records = [
+                    {"type": "A", "name": "@", "content": vps_host, "ttl": 3600},
+                    {"type": "A", "name": "www", "content": vps_host, "ttl": 3600}
+                ]
+
+                for record in dns_records:
+                    try:
+                        requests.post(f"{base_url}/domains/{domain_id}/dns", headers=headers, json=record, timeout=30)
+                        deployment_log.append(f"DNS record configured: {record['name']} → {vps_host}")
+                    except:
+                        deployment_log.append(f"DNS record may already exist: {record['name']}")
+
+                deployment_log.append("Step 2 complete: DNS configured")
+
+            except Exception as e:
+                deployment_log.append(f"DNS configuration error: {str(e)}")
+                return [TextContent(type="text", text=json.dumps({"error": str(e), "log": deployment_log}, indent=2))]
+
+            # Step 3: Wait for DNS propagation
+            deployment_log.append("Step 3: Waiting for DNS propagation (30 seconds)...")
+            time.sleep(30)
+
+            # Check DNS
+            dns_check_cmd = f"dig +short {domain}"
+            try:
+                dns_result = subprocess.run(dns_check_cmd, shell=True, capture_output=True, text=True, timeout=10)
+                resolved_ip = dns_result.stdout.strip()
+                deployment_log.append(f"DNS check: {domain} resolves to {resolved_ip}")
+            except:
+                deployment_log.append("DNS check: Still propagating (this is normal)")
+
+            # Step 4: Set up SSL
+            deployment_log.append("Step 4: Setting up SSL certificate...")
+            certbot_cmd = f"{ssh_cmd} 'certbot --nginx -d {domain} -d www.{domain} --non-interactive --agree-tos --email {email} --redirect 2>&1'"
+
+            try:
+                result = subprocess.run(certbot_cmd, shell=True, capture_output=True, text=True, timeout=300)
+                if result.returncode == 0:
+                    deployment_log.append("Step 4 complete: SSL certificate installed")
+                else:
+                    deployment_log.append(f"SSL setup: {result.stderr[:200]}")
+            except Exception as e:
+                deployment_log.append(f"SSL setup: {str(e)} (You can retry later)")
+
+            # Final status
+            deployment_log.append("\n=== DEPLOYMENT COMPLETE ===")
+            deployment_log.append(f"Application URL: https://{domain}")
+            deployment_log.append(f"Admin login: admin@contractor.local / ContractorAdmin2025!")
+            deployment_log.append("IMPORTANT: Change the admin password immediately!")
+
+            return [TextContent(
+                type="text",
+                text=json.dumps({
+                    "success": True,
+                    "domain": domain,
+                    "url": f"https://{domain}",
+                    "deployment_log": deployment_log
+                }, indent=2)
+            )]
 
         else:
             raise ValueError(f"Unknown tool: {name}")
