@@ -1,0 +1,77 @@
+
+Application Directory; R:\Contractor App\app
+
+gmail 
+-u contractorappdev@gmail.com
+-p Bimmer325i
+-app password: jyfe kblo myda uiut
+
+mysql login
+-u contractorappdev@gmail.com
+-p Bimmer325!
+
+Mysql powershell commands to database
+ mysql -u root -p
+ USE contractor_portal;
+
+activate venv: venv\Scripts\activate (Paste this in CMD prompt window for the app directory)
+
+mysql user on timesheets 
+-u gracej -p Bimmer325!
+
+uvicorn main:app --reload
+ cd "R:\Contractor App\app"
+ 
+ Help Doc
+ http://127.0.0.1:8000/docs
+ 
+ 03/10/2025
+ we are adding green services to the database
+ 
+ test email
+ agrifarmsio@gmail.com
+ app password: efin evfi ekgb qjfq
+ 
+ mysql shortcuts
+ uvicorn main:app --reload
+ 
+ admin email 
+ -u admin@example.com
+ -p Added123%
+ 
+ Google Cloud Dev
+ - Connection Name= sinuous-client-455416-v5:us-central1:contractor-db
+ - Instance ID contractor-db
+ - p Bubbles35$
+ - /home/bgkegger34/
+ - gcloud config set account bgkegger34@gmail.com
+ - ./cloud_sql_proxy -instances="sinuous-client-455416-v5:us-central1:contractor-db"=tcp:3306 &
+ - mysql -u root -p -h 127.0.0.1 -P 3306
+
+ 
+ Cloud commands to deploy
+gcloud builds submit --tag gcr.io/sinuous-client-455416-v5/contractor-portal
+
+gcloud run deploy contractor-portal `
+  --image gcr.io/sinuous-client-455416-v5/contractor-portal `
+  --platform managed `
+  --region us-central1 `
+  --allow-unauthenticated `
+  --set-env-vars "DB_HOST=/cloudsql/sinuous-client-455416-v5:us-central1:contractor-db,DB_USER=root,DB_PASSWORD=Bimmer325!,DB_NAME=contractor_portal,SECRET_KEY=super_secret_key,EMAIL_USER=contractorappdev@gmail.com,EMAIL_PASSWORD=Bimmer325!"
+
+NEW CLOUD DEPLOY
+gcloud run deploy contractor-portal `
+  --source "R:\Contractor App\app" `
+  --platform managed `
+  --region us-central1 `
+  --allow-unauthenticated `
+  --set-env-vars "DB_HOST=/cloudsql/sinuous-client-455416-v5:us-central1:contractor-db,DB_USER=root,DB_PASSWORD=Bimmer325!,DB_NAME=contractor_portal,SECRET_KEY=super_secret_key,EMAIL_USER=contractorappdev@gmail.com,EMAIL_PASSWORD=Bimmer325!"
+
+
+ZIP User
+Email: admin@test.com
+
+Password: Test123! (after adding the SQL user we did earlier)
+
+github 
+https://github.com/kkers42/contractor-portal

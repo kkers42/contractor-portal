@@ -1,0 +1,386 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Property Information</title>
+  <script src="/static/config.js"></script>
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 10px;
+    }
+    .action-bar {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-start;
+    }
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+    .btn-danger {
+      color: #ff8080;
+      border-color: #ff8080;
+    }
+    .btn-danger:hover {
+      background-color: #3a2a2a;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background-color: #000;
+    }
+    th, td {
+      border: 1px solid #80ff80;
+      padding: 8px;
+      text-align: left;
+    }
+    th {
+      background-color: #111;
+    }
+    .action-btns {
+      display: flex;
+      gap: 5px;
+    }
+    .action-btns button {
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.8);
+    }
+    .modal-content {
+      background-color: #1a1a1a;
+      margin: 5% auto;
+      padding: 20px;
+      border: 2px solid #80ff80;
+      width: 80%;
+      max-width: 600px;
+      color: #80ff80;
+    }
+    .close {
+      color: #ff8080;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .close:hover {
+      color: #ff4040;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .form-group input, .form-group select {
+      width: 100%;
+      padding: 8px;
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      font-family: 'Courier New', monospace;
+    }
+    .form-group input[type="checkbox"] {
+      width: auto;
+    }
+    .checkbox-group {
+      display: flex;
+      gap: 20px;
+      align-items: center;
+    }
+    #bulkImportInput {
+      display: none;
+    }
+  </style>
+</head>
+<body onload="initializePage()">
+  <h2>All Properties</h2>
+
+  <div class="action-bar">
+    <button class="btn" onclick="openAddModal()">+ Add Property</button>
+    <button class="btn" onclick="document.getElementById('bulkImportInput').click()">Bulk Import (Excel)</button>
+    <input type="file" id="bulkImportInput" accept=".xlsx,.xls" onchange="handleBulkImport(event)">
+  </div>
+
+  <table>
+    <thead>
+      <tr>
+        <th>Name</th>
+        <th>Address</th>
+        <th>Sq Ft</th>
+        <th>Area Manager</th>
+        <th>Plow</th>
+        <th>Salt</th>
+        <th>Actions</th>
+      </tr>
+    </thead>
+    <tbody id="propertyTableBody"></tbody>
+  </table>
+
+  <!-- Add/Edit Property Modal -->
+  <div id="propertyModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h3 id="modalTitle">Add Property</h3>
+      <form id="propertyForm">
+        <input type="hidden" id="propertyId">
+
+        <div class="form-group">
+          <label>Property Name:</label>
+          <input type="text" id="propertyName" required>
+        </div>
+
+        <div class="form-group">
+          <label>Address:</label>
+          <input type="text" id="propertyAddress" required>
+        </div>
+
+        <div class="form-group">
+          <label>Square Footage:</label>
+          <input type="number" id="propertySqft" required>
+        </div>
+
+        <div class="form-group">
+          <label>Area Manager:</label>
+          <input type="text" id="propertyManager" required>
+        </div>
+
+        <div class="form-group checkbox-group">
+          <label>
+            <input type="checkbox" id="propertyPlow"> Plow Service
+          </label>
+          <label>
+            <input type="checkbox" id="propertySalt"> Salt Service
+          </label>
+        </div>
+
+        <div class="form-group">
+          <button type="submit" class="btn">Save Property</button>
+          <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager', 'Subcontractor']);
+      await fetchProperties();
+    }
+
+    async function fetchProperties() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/properties/`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        const data = await response.json();
+        const tbody = document.getElementById("propertyTableBody");
+        tbody.innerHTML = "";
+
+        data.forEach(p => {
+          const row = document.createElement("tr");
+          row.innerHTML = `
+            <td>${p.name}</td>
+            <td>${p.address}</td>
+            <td>${p.sqft}</td>
+            <td>${p.area_manager}</td>
+            <td>${p.plow ? "Yes" : "No"}</td>
+            <td>${p.salt ? "Yes" : "No"}</td>
+            <td class="action-btns">
+              <button class="btn" onclick="openEditModal(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.address.replace(/'/g, "\\'")}', ${p.sqft}, '${p.area_manager.replace(/'/g, "\\'")}', ${p.plow}, ${p.salt})">Edit</button>
+              <button class="btn btn-danger" onclick="deleteProperty(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete</button>
+            </td>
+          `;
+          tbody.appendChild(row);
+        });
+      } catch (err) {
+        console.error("Error fetching properties:", err);
+        alert("Failed to load properties.");
+      }
+    }
+
+    function openAddModal() {
+      document.getElementById('modalTitle').textContent = 'Add Property';
+      document.getElementById('propertyForm').reset();
+      document.getElementById('propertyId').value = '';
+      document.getElementById('propertyModal').style.display = 'block';
+    }
+
+    function openEditModal(id, name, address, sqft, manager, plow, salt) {
+      document.getElementById('modalTitle').textContent = 'Edit Property';
+      document.getElementById('propertyId').value = id;
+      document.getElementById('propertyName').value = name;
+      document.getElementById('propertyAddress').value = address;
+      document.getElementById('propertySqft').value = sqft;
+      document.getElementById('propertyManager').value = manager;
+      document.getElementById('propertyPlow').checked = plow;
+      document.getElementById('propertySalt').checked = salt;
+      document.getElementById('propertyModal').style.display = 'block';
+    }
+
+    function closeModal() {
+      document.getElementById('propertyModal').style.display = 'none';
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+      const modal = document.getElementById('propertyModal');
+      if (event.target == modal) {
+        modal.style.display = 'none';
+      }
+    }
+
+    // Handle form submission
+    document.getElementById('propertyForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const propertyId = document.getElementById('propertyId').value;
+      const propertyData = {
+        name: document.getElementById('propertyName').value,
+        address: document.getElementById('propertyAddress').value,
+        sqft: parseInt(document.getElementById('propertySqft').value),
+        area_manager: document.getElementById('propertyManager').value,
+        plow: document.getElementById('propertyPlow').checked,
+        salt: document.getElementById('propertySalt').checked
+      };
+
+      const token = localStorage.getItem("token");
+
+      try {
+        let response;
+        if (propertyId) {
+          // Update existing property
+          response = await fetch(`${API_BASE_URL}/update-property/`, {
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ ...propertyData, id: parseInt(propertyId) })
+          });
+        } else {
+          // Add new property
+          response = await fetch(`${API_BASE_URL}/add-property/`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(propertyData)
+          });
+        }
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert(result.message || 'Property saved successfully!');
+          closeModal();
+          await fetchProperties();
+        } else {
+          alert('Error: ' + (result.detail || 'Failed to save property'));
+        }
+      } catch (err) {
+        console.error('Error saving property:', err);
+        alert('Failed to save property. Please try again.');
+      }
+    });
+
+    async function deleteProperty(id, name) {
+      if (!confirm(`Are you sure you want to delete "${name}"?`)) {
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/delete-property/${id}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert(result.message || 'Property deleted successfully!');
+          await fetchProperties();
+        } else {
+          alert('Error: ' + (result.detail || 'Failed to delete property'));
+        }
+      } catch (err) {
+        console.error('Error deleting property:', err);
+        alert('Failed to delete property. Please try again.');
+      }
+    }
+
+    async function handleBulkImport(event) {
+      const file = event.target.files[0];
+      if (!file) return;
+
+      const formData = new FormData();
+      formData.append('file', file);
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/bulk-import-properties/`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          },
+          body: formData
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert(result.message || `Successfully imported ${result.count || 0} properties!`);
+          await fetchProperties();
+        } else {
+          alert('Error: ' + (result.detail || 'Failed to import properties'));
+        }
+      } catch (err) {
+        console.error('Error importing properties:', err);
+        alert('Failed to import properties. Please try again.');
+      }
+
+      // Reset file input
+      event.target.value = '';
+    }
+  </script>
+</body>
+</html>

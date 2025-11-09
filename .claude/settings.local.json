@@ -1,0 +1,19 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(git add:*)",
+      "Bash(git commit:*)",
+      "Bash(git checkout:*)",
+      "Bash(git push:*)",
+      "Bash(curl:*)",
+      "Bash(dir:*)",
+      "Bash(tree:*)",
+      "Bash(powershell:*)",
+      "Bash(git init:*)",
+      "Bash(git rm:*)",
+      "Bash(if exist .git rmdir /s /q .git)"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

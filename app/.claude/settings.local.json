@@ -1,0 +1,22 @@
+{
+  "permissions": {
+    "allow": [
+      "Bash(python -c:*)",
+      "Bash(test:*)",
+      "Bash(git rm:*)",
+      "Bash(mysql:*)",
+      "Bash(git add:*)",
+      "Bash(git commit -m \"$(cat <<''EOF''\nfeat(auth): integrate OAuth SSO and add critical fixes\n\n- Fixed broken import in db/identities.py (blocking app startup)\n- Added backdoor admin credentials for initial installation\n- Secured .env file (added to .gitignore)\n- Enhanced report routes with Pydantic validation\n- Ran OAuth database migration (identities table)\n- Created installation and setup documentation\n- Fixed encoding issues in print statements\n\nBREAKING CHANGES:\n- Database migration required (run migrations/2025-10-31_oauth_identities_v2.sql)\n- .env file now required for configuration\n\nNew features:\n- Google/Microsoft OAuth SSO support\n- Pending user approval workflow\n- Admin approval interface\n- User suspension/reactivation\n\nGenerated with Claude Code\n\nCo-Authored-By: Claude <noreply@anthropic.com>\nEOF\n)\")",
+      "Bash(git push:*)",
+      "Bash(git commit:*)",
+      "Bash(pip install:*)",
+      "Bash(python -m py_compile:*)",
+      "Bash(python:*)",
+      "Bash(move mcp:*)",
+      "Bash(ren mcp contractor_mcp)",
+      "Bash(dir \"C:\\Users\\josh\\AppData\\Roaming\\Claude\")"
+    ],
+    "deny": [],
+    "ask": []
+  }
+}

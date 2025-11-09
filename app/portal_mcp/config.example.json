@@ -1,0 +1,53 @@
+{
+  "server": {
+    "name": "contractor-portal-mcp",
+    "version": "1.0.0",
+    "description": "MCP server for Contractor Portal web integrations"
+  },
+  "database": {
+    "host": "localhost",
+    "port": 3306,
+    "user": "contractor",
+    "password": "CHANGE_ME",
+    "database": "contractor_portal"
+  },
+  "weather": {
+    "provider": "openweathermap",
+    "api_key": "YOUR_API_KEY_HERE",
+    "api_url": "https://api.openweathermap.org/data/2.5",
+    "cache_duration_minutes": 15,
+    "default_units": "metric"
+  },
+  "portal": {
+    "base_url": "http://localhost:8080",
+    "api_prefix": "/api/v1"
+  },
+  "messaging": {
+    "enabled": true,
+    "max_message_length": 5000,
+    "default_priority": "normal",
+    "notification_on_send": true
+  },
+  "notifications": {
+    "enabled": true,
+    "types": [
+      "weather",
+      "messages",
+      "tasks",
+      "system"
+    ],
+    "retention_days": 30
+  },
+  "logging": {
+    "level": "INFO",
+    "file": "portal_mcp.log",
+    "max_size_mb": 10,
+    "backup_count": 5
+  },
+  "features": {
+    "weather_integration": "placeholder",
+    "messaging": "placeholder",
+    "notifications": "placeholder",
+    "weather_alerts": "placeholder"
+  }
+}

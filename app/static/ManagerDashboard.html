@@ -1,0 +1,65 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <title>Manager Dashboard - Contractor Portal</title>
+  <script src="/static/config.js"></script>
+  <script>
+    function checkAccess(allowedRoles) {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/static/login.html';
+        return;
+      }
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const role = payload.role;
+      if (!allowedRoles.includes(role)) {
+        alert("Access denied.");
+        window.location.href = '/static/login.html';
+      }
+    }
+    window.onload = () => checkAccess(['Manager', 'Admin']);
+  </script>
+  <style>
+    body {
+      background-color: #000;
+      font-family: 'Courier New', Courier, monospace;
+      color: #33ff33;
+      text-align: center;
+      margin: 0;
+      padding: 20px;
+    }
+    h1 {
+      color: #00ff00;
+    }
+    .button {
+      display: inline-block;
+      margin: 10px;
+      padding: 10px 20px;
+      background-color: black;
+      color: #33ff33;
+      border: 1px solid #33ff33;
+      border-radius: 5px;
+      text-decoration: none;
+    }
+    .button:hover {
+      background-color: #003300;
+    }
+  </style>
+</head>
+<body>
+  <h1>Manager Dashboard</h1>
+  <a href="/static/PropertyInfo.html" class="button">View Properties</a>
+  <a href="/static/Reports.html" class="button">Generate Reports</a>
+  <br>
+  <a href="/static/WinterOpsLog.html" class="button">Submit Winter Log</a>
+  <a href="/static/GreenOpsLog.html" class="button">Submit Green Log</a>
+  <br>
+  <a href="/static/ViewWinterLogs.html" class="button">View Winter Logs</a>
+  <a href="/static/ViewGreenLogs.html" class="button">View Green Logs</a>
+  <br>
+  <a href="/static/ManageEquipmentRates.html" class="button">Manage Equipment Rates</a>
+  <a href="/static/EquipmentUsageReport.html" class="button">Equipment Usage Report</a>
+  <br>
+  <a href="/static/Home.html" class="button">Return Home</a>
+</body>
+</html>

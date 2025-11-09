@@ -1,0 +1,139 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Winter Operations Logs - Admin View</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1a1a1a;
+            color: #80ff80;
+            padding: 20px;
+        }
+        h2 {
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+            background-color: #000;
+        }
+        th, td {
+            border: 1px solid #80ff80;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #111;
+        }
+        tr:nth-child(even) {
+            background-color: #111;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            font-size: 16px;
+            cursor: pointer;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+    </style>
+</head>
+<body onload="checkAccess(['Admin', 'Manager', 'Subcontractor'])">
+    <h2>Winter Operations Logs - Admin View</h2>
+
+    <table id="logsTable">
+        <thead>
+            <tr>
+                <th>ID</th>
+                <th>Property</th>
+                <th>Subcontractor</th>
+                <th>Time In</th>
+                <th>Time Out</th>
+                <th>Total Time (Hrs)</th>
+                <th>Bulk Salt (Yds)</th>
+                <th>Bag Salt</th>
+                <th>Calcium Chloride</th>
+                <th>Customer Provided</th>
+                <th>Notes</th>
+            </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+
+    <button onclick="window.print()">Print Report</button>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', fetchLogs);
+
+        async function fetchLogs() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_BASE_URL}/winter-logs/`, {
+                    headers: {
+                        'Authorization': 'Bearer ' + token
+                    }
+                });
+
+                const logs = await response.json();
+                const tableBody = document.querySelector('#logsTable tbody');
+                tableBody.innerHTML = '';
+
+                logs.forEach(log => {
+                    const timeIn = new Date(log.time_in);
+                    const timeOut = new Date(log.time_out);
+                    const totalHours = ((timeOut - timeIn) / 1000 / 60 / 60).toFixed(2);
+
+                    const row = document.createElement('tr');
+                    row.innerHTML = `
+                        <td>${log.id}</td>
+                        <td>${log.property_name}</td>
+                        <td>${log.subcontractor_name}</td>
+                        <td>${log.time_in}</td>
+                        <td>${log.time_out}</td>
+                        <td>${totalHours}</td>
+                        <td>${log.bulk_salt_qty}</td>
+                        <td>${log.bag_salt_qty}</td>
+                        <td>${log.calcium_chloride_qty}</td>
+                        <td>${log.customer_provided ? "Yes" : "No"}</td>
+                        <td>${log.notes}</td>
+                    `;
+                    tableBody.appendChild(row);
+                });
+            } catch (error) {
+                console.error('Failed to load logs:', error);
+                alert('Error fetching logs.');
+            }
+        }
+
+        function checkAccess(allowedRoles) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/static/login.html';
+                return;
+            }
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const role = payload.role;
+            if (!allowedRoles.includes(role)) {
+                alert("Access denied.");
+                window.location.href = '/static/login.html';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/static/login.html';
+        }
+    </script>
+</body>
+</html>

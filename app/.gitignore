@@ -1,0 +1,45 @@
+# Bytecode and caches
+__pycache__/
+*.py[cod]
+
+# System files
+.DS_Store
+Thumbs.db
+
+# Environment variables (SECURITY: Contains passwords and secrets)
+.env
+.env.local
+.env.production
+
+# Python virtual environments
+env/
+venv/
+
+# Editor folders
+.vscode/
+.idea/
+
+# Compiled files or database dumps
+*.sqlite3
+*.db
+contractor_portal_backup.sql
+*_backup.sql
+
+# Logs or temp files
+*.log
+*.bak
+
+# Build/test artifacts
+archive/
+last save/
+working testbed/
+contractor_portal_fresh/
+
+# GCP + Docker
+.gcloudignore
+.dockerignore
+Dockerfile
+Procfile
+
+# Optional: Exclude sensitive data folder
+data/

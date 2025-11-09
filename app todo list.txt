@@ -1,0 +1,269 @@
+## ✅ Completed
+- Database schema for **contractor_portal** (locations, winter_ops_logs, green_services_logs, users, admin_settings)
+- Add / Edit / Delete **properties** in the Admin Dashboard
+- Add / Edit / Delete **users** (manual admin creation)
+- Winter Operations Log (Subcontractor view)
+- Winter Operations Admin view
+- Bulk property import (basic)
+- Role-based access control setup
+- Signup requests send **email notifications to Admin** (WIP debugging `update-signup-email`)
+- Admin can **edit signup email** (testing/fixing)
+- Fix `Set Signup Email` (DB update works, but fetch doesn't return updated email)
+- Replace hardcoded ADMIN_EMAIL in `/request-user/` with dynamic fetch from DB
+
+## ⚠️ Needs Fixed
+1. Clean up frontend UX on `AdminDashboard.html` (signup email form inside script)
+
+## 📝 To Do
+1. Build **Green Services Log** (Sub view + Admin view)
+2. Bulk user import from **signup requests**
+3. Add **user login + dashboard redirect by role**
+4. Role-based **permissions** on pages (lock down routes/views)
+5. Polish **AdminDashboard.html** for clarity/usability
+6. Email **error handling/logging**
+7. Optional: Export reports (Winter + Green ops) to **PDF/CSV**
+8. Optional: Secure **JWT authentication** with password hashing (production hardening)
+9. Optional: Add **activity logs** for admin actions
+10. Optional: Frontend **responsive design** pass (mobile-friendly tweaks)
+
+
+--Below from chat gpt needs verified--
+## ✅ Completed
+- Database schema for contractor_portal (locations, winter_ops_logs, green_services_logs, users, admin_settings)
+- Add / Edit / Delete properties in the Admin Dashboard
+- Add / Edit / Delete users (manual admin creation)
+- Winter Operations Log (Subcontractor view)
+- Winter Operations Admin view
+- Bulk property import (basic)
+- Role-based access control setup
+- Signup requests send email notifications to Admin
+- Admin can edit signup email (confirmed working, verified in SQL)
+- User signup page sends signup requests to DB (verified in SQL)
+
+## ⚠️ Needs Fixed (Prioritized)
+- Clean up frontend UX on `AdminDashboard.html` (polish status messages and layout)
+
+## 📝 To Do (Prioritized)
+1. Implement bulk user import from signup requests (partially implemented - next: approveSelectedRequests test)
+2. Lock pages by role, redirect by role
+3. Optional: Export reports (Winter + Green ops) to CSV/PDF
+4. Optional: Responsive design polish
+5. Optional: Admin activity logs
+6. Optional: Secure JWT (use .env for secret keys)
+
+✅ Completed
+Property management: Add, Edit, Delete, View
+
+PropertyInfo page styled and functional
+
+Winter Ops Logs: submission and viewing (Admin/User separation complete)
+
+Green Ops Logs: tables created, front-end progress started
+
+Bulk property import (XLSX upload tested and working)
+
+Signup request system sends to DB
+
+Admin can view and approve user signups
+
+User creation from signup requests works
+
+Full role-based access control and redirect system implemented
+
+JWT login system with logout buttons across pages
+
+Pages restricted to role permissions (e.g., Admin-only views)
+
+Products: Add/Edit/Delete/View for Winter & Landscape
+
+Set Signup Email functionality (writes to DB)
+
+AdminDashboard leads to sub-pages instead of cluttered content
+
+Frontend logout confirmed working
+
+User sessions protected with token-based checks
+
+Tracker system (project progress tracking) created and updated
+
+⚙️ All MySQL tables created and validated
+
+🐞 Needs Fixed / Currently Broken
+Nothing critical at this time 🎉
+
+📋 To Do (Current Priorities)
+✅ ManageWinterProducts.html
+
+Add/Edit/Delete working ✅
+
+✅ Complete
+
+✅ ManageLandscapeProducts.html
+
+Add/Edit/Delete working ✅
+
+✅ Complete
+
+⚠️ Green Operations Log (User view)
+
+Submit logs for green/lawn services
+
+Mirror WinterOpsLog.html structure
+
+Save to green_services_logs table
+
+⚠️ GreenOpsAdmin.html
+
+View/filter green logs by property, user, etc.
+
+Mirror WinterOpsAdmin.html structure
+
+🔄 Refactor/clean-up AdminDashboard.html
+
+Keep only: Set Signup Email, Run Reports, Product Editors
+
+Final design confirmed ✅
+
+🔮 Future Improvements (Post-Deployment)
+Google login for subcontractors
+
+Sign-up should request "Admin" role but only existing Admins can approve
+
+Differentiate between subcontractors and employees (type field)
+
+Job tracking system
+
+Accept jobs via API from external sites
+
+Prioritize and assign based on urgency/location
+
+Add product inventory (stock tracking)
+
+Create bulk add product import (with downloadable template)
+
+Green service reports (PDF/CSV)
+
+Winter/Green combined reporting tool
+
+Admin logs: track login actions, deletes, edits, etc.
+
+.env secrets setup (better JWT security)
+
+Optional: Responsive/mobile-first styling pass
+
+✅ Completed Features
+User Authentication
+
+Login + JWT token storage
+
+Role-based redirects (Admin, Manager, Subcontractor)
+
+Signup request with admin approval
+
+Password hashing and token-based authentication
+
+Admin Dashboard
+
+View and approve signup requests
+
+Set signup notification email
+
+Navigate to property/user/product management
+
+Run reports
+
+User Management
+
+Add, edit, delete users
+
+Reset passwords
+
+Role selection and enforcement
+
+Property Management
+
+Add, edit, delete properties
+
+View detailed property info
+
+Bulk Excel import of properties
+
+Winter Operations
+
+Submit logs (time in/out, product quantities, notes)
+
+Admin view with total time calculation
+
+Product management (add/edit/delete winter products)
+
+Green Services (Landscape)
+
+Submit logs (service type, product used, quantities)
+
+Admin view with time and product tracking
+
+Product management (add/edit/delete landscape products)
+
+Role-Based Access Control
+
+checkAccess([roles]) enforced on all pages
+
+Unauthorized users are redirected
+
+Frontend Pages
+
+Home, Login, Signup, AdminDashboard, ManageUsers, Manage[Winter|Landscape]Products, PropertyInfo, Reports, GreenOpsLog/Admin, WinterOpsLog/Admin
+
+🔜 Upcoming / Future Improvements
+Edit Property Info
+
+Currently stubbed with “coming soon” alert.
+
+Add modal for inline editing of property details.
+
+Property-linked Log Filtering
+
+When viewing a property, allow filtering logs (winter/green) specific to it.
+
+Export to Excel/PDF
+
+Generate downloadable reports for time logs and products used.
+
+Timesheet Review & Approval
+
+Allow managers/admins to review and approve logs before they’re finalized.
+
+In-App Messaging or Notifications
+
+Notify managers/admins of log submissions, pending approvals, or new signup requests.
+
+Mobile Optimization
+
+Responsive design tweaks to make the portal mobile-friendly.
+
+Dashboard Metrics
+
+Show KPIs like total hours logged, top properties, product usage summary.
+
+Reset Password (User-Initiated)
+
+Add “Forgot password?” flow via email link with token.
+
+Subcontractor Profiles
+
+Page for subcontractors to view/edit their profile and history.
+
+📝 Todo
+ Implement Edit Property Info modal
+
+ Add inline filtering for property-specific logs
+
+ Add PDF/CSV Export options on admin log views
+
+ Finish Report generation (placeholder alert on Admin Dashboard)
+
+ Add service-based filtering for Green and Winter logs
+
+ Harden backend with additional validation and error handling
+
+ Clean up frontend styles and unify button styles across pages

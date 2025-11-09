@@ -1,0 +1,157 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Green Services Logs - Admin View</title>
+  <style>
+    body {
+      background-color: #1a1a1a;
+      color: #80ff80;
+      font-family: 'Courier New', monospace;
+      padding: 20px;
+    }
+
+    h2 {
+      text-align: center;
+      color: #80ff80;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 5px;
+    }
+
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+      background-color: #000;
+      color: #80ff80;
+    }
+
+    th, td {
+      border: 1px solid #80ff80;
+      padding: 8px;
+      text-align: center;
+    }
+
+    th {
+      background-color: #111;
+    }
+
+    tr:nth-child(even) {
+      background-color: #111;
+    }
+
+    button {
+      margin-top: 15px;
+      padding: 10px 20px;
+      font-size: 16px;
+      cursor: pointer;
+      background-color: #000;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      font-family: 'Courier New', monospace;
+    }
+
+    button:hover {
+      background-color: #004400;
+      border-color: #00cc00;
+    }
+  </style>
+  <script src="/static/config.js"></script>
+</head>
+<body onload="initializePage()">
+  <h2>Green Services Logs - Admin View</h2>
+
+  <table id="logsTable">
+    <thead>
+      <tr>
+        <th>ID</th>
+        <th>Property</th>
+        <th>Contractor</th>
+        <th>Worker</th>
+        <th>Time In</th>
+        <th>Time Out</th>
+        <th>Total Time (Hrs)</th>
+        <th>Service Type</th>
+        <th>Products Used</th>
+        <th>Quantity Used</th>
+        <th>Notes</th>
+      </tr>
+    </thead>
+    <tbody></tbody>
+  </table>
+
+  <button onclick="window.print()">Print Report</button>
+
+  <script>
+    function initializePage() {
+      checkAccess(['Admin', 'Manager', 'Subcontractor']);
+      fetchLogs();
+    }
+
+    async function fetchLogs() {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        alert('Not authorized. Please log in.');
+        window.location.href = '/static/login.html';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/green-logs/`, {
+          headers: {
+            'Authorization': `Bearer ${token}`
+          }
+        });
+
+        const logs = await response.json();
+        const tableBody = document.querySelector('#logsTable tbody');
+        tableBody.innerHTML = '';
+
+        logs.forEach(log => {
+          const timeIn = new Date(log.time_in);
+          const timeOut = new Date(log.time_out);
+          const totalHours = ((timeOut - timeIn) / 1000 / 60 / 60).toFixed(2);
+
+          const row = document.createElement('tr');
+          row.innerHTML = `
+            <td>${log.id}</td>
+            <td>${log.property_name}</td>
+            <td>${log.contractor_name || 'N/A'}</td>
+            <td>${log.worker_name || 'N/A'}</td>
+            <td>${log.time_in}</td>
+            <td>${log.time_out}</td>
+            <td>${totalHours}</td>
+            <td>${log.service_type}</td>
+            <td>${log.products_used}</td>
+            <td>${log.quantity_used}</td>
+            <td>${log.notes}</td>
+          `;
+          tableBody.appendChild(row);
+        });
+      } catch (error) {
+        console.error('Failed to load logs:', error);
+        alert('Error fetching logs.');
+      }
+    }
+
+    function logout() {
+      localStorage.removeItem('token');
+      window.location.href = '/static/login.html';
+    }
+
+    function checkAccess(allowedRoles) {
+      const token = localStorage.getItem('token');
+      if (!token) {
+        window.location.href = '/static/login.html';
+        return;
+      }
+      const payload = JSON.parse(atob(token.split('.')[1]));
+      const role = payload.role;
+      if (!allowedRoles.includes(role)) {
+        alert("Access denied.");
+        window.location.href = '/static/login.html';
+      }
+    }
+  </script>
+</body>
+</html>

@@ -1,0 +1,254 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Winter Operations Log</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0; padding: 20px;
+            background-color: #1a1a1a;
+            color: #80ff80;
+        }
+        .container {
+            max-width: 600px; margin: auto;
+            background-color: #000;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #80ff80;
+            box-shadow: 0 0 10px rgba(0,255,0,0.2);
+        }
+        h2 {
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+        }
+        label {
+            display: block; margin-top: 10px;
+        }
+        input, select, textarea {
+            width: 100%; padding: 8px;
+            margin-top: 5px;
+            border-radius: 4px;
+            border: 1px solid #80ff80;
+            background-color: #000;
+            color: #80ff80;
+            font-family: 'Courier New', monospace;
+        }
+        input::placeholder, textarea::placeholder {
+            color: #80ff80;
+            opacity: 0.6;
+        }
+        button {
+            margin-top: 15px;
+            width: 100%;
+            padding: 10px;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            border-radius: 4px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 16px;
+        }
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+    </style>
+</head>
+<body onload="checkAccess(['Admin', 'Manager', 'Subcontractor'])">
+    <div class="container">
+        <h2>Winter Operations Log</h2>
+
+        <label for="property">Property</label>
+        <select id="property" required></select>
+
+        <label for="contractor">Contractor (Manager)</label>
+        <select id="contractor" required></select>
+
+        <label for="worker">Worker Name (Last, First)</label>
+        <input type="text" id="worker" placeholder="Doe, John" required>
+
+        <label for="service">Equipment</label>
+        <select id="service" required></select>
+
+        <label for="time_in">Time In</label>
+        <input type="datetime-local" id="time_in" required>
+
+        <label for="time_out">Time Out</label>
+        <input type="datetime-local" id="time_out" required>
+
+        <label for="bulk_salt_qty">Bulk Salt (Yards)</label>
+        <input type="number" id="bulk_salt_qty" min="0" step="0.01" value="0">
+
+        <label for="bag_salt_qty">Bag Salt (Bags)</label>
+        <input type="number" id="bag_salt_qty" min="0" step="1" value="0">
+
+        <label for="calcium_chloride_qty">Calcium Chloride (Bags)</label>
+        <input type="number" id="calcium_chloride_qty" min="0" step="1" value="0">
+
+        <label for="customer_provided">Customer Provided Product?</label>
+        <select id="customer_provided">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+        </select>
+
+        <label for="notes">Notes</label>
+        <textarea id="notes" rows="3" placeholder="Additional information..."></textarea>
+
+        <button onclick="submitWinterOpsLog()">Submit Log</button>
+    </div>
+
+    <script>
+        document.addEventListener('DOMContentLoaded', () => {
+            fetchProperties();
+            fetchContractors();
+            fetchEquipment();
+        });
+
+        async function fetchProperties() {
+            try {
+                const response = await fetch(`${API_BASE_URL}/properties/`);
+                const properties = await response.json();
+                const select = document.getElementById('property');
+
+                properties.forEach(prop => {
+                    const option = document.createElement('option');
+                    option.value = prop.id;
+                    option.textContent = `${prop.name} (${prop.address})`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load properties:', error);
+                alert('Could not load properties. Check console.');
+            }
+        }
+
+        async function fetchContractors() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${API_BASE_URL}/contractors/`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const contractors = await response.json();
+                const select = document.getElementById('contractor');
+
+                contractors.forEach(contractor => {
+                    const option = document.createElement('option');
+                    option.value = contractor.id;
+                    option.textContent = contractor.name;
+                    select.appendChild(option);
+                });
+
+                // Auto-select contractor and populate worker name based on role
+                const payload = JSON.parse(atob(token.split('.')[1]));
+
+                if (payload.role === 'Manager') {
+                    // Auto-select this manager as contractor
+                    const userOption = Array.from(select.options).find(opt => opt.textContent === payload.name);
+                    if (userOption) userOption.selected = true;
+                } else if (payload.role === 'Subcontractor') {
+                    // Auto-populate worker name with logged-in user's name
+                    document.getElementById('worker').value = payload.name;
+                }
+            } catch (error) {
+                console.error('Failed to load contractors:', error);
+                alert('Could not load contractors. Check console.');
+            }
+        }
+
+        async function fetchEquipment() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${API_BASE_URL}/equipment-rates/`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const equipment = await response.json();
+                const select = document.getElementById('service');
+
+                equipment.forEach(eq => {
+                    const option = document.createElement('option');
+                    option.value = eq.equipment_name;
+                    option.textContent = `${eq.equipment_name} ($${eq.hourly_rate}/hr)`;
+                    select.appendChild(option);
+                });
+            } catch (error) {
+                console.error('Failed to load equipment:', error);
+                alert('Could not load equipment. Check console.');
+            }
+        }
+
+        async function submitWinterOpsLog() {
+            const token = localStorage.getItem('token');
+            const contractorSelect = document.getElementById('contractor');
+            const selectedContractor = contractorSelect.options[contractorSelect.selectedIndex];
+
+            const data = {
+                property_id: parseInt(document.getElementById('property').value),
+                contractor_id: parseInt(contractorSelect.value),
+                contractor_name: selectedContractor.textContent,
+                worker_name: document.getElementById('worker').value,
+                equipment: document.getElementById('service').value,
+                time_in: document.getElementById('time_in').value,
+                time_out: document.getElementById('time_out').value,
+                bulk_salt_qty: parseFloat(document.getElementById('bulk_salt_qty').value),
+                bag_salt_qty: parseFloat(document.getElementById('bag_salt_qty').value),
+                calcium_chloride_qty: parseFloat(document.getElementById('calcium_chloride_qty').value),
+                customer_provided: document.getElementById('customer_provided').value === 'true',
+                notes: document.getElementById('notes').value
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/submit-winter-log/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(data)
+                });
+
+                if (!response.ok) throw new Error(`Server error: ${response.status}`);
+
+                const result = await response.json();
+                alert(result.message || 'Winter Ops Log submitted!');
+                window.location.reload();
+            } catch (error) {
+                console.error('Error submitting log:', error);
+                alert('Failed to submit log. Check console.');
+            }
+        }
+
+        function checkAccess(allowedRoles) {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/static/login.html';
+                return;
+            }
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const role = payload.role;
+            if (!allowedRoles.includes(role)) {
+                alert("Access denied.");
+                window.location.href = '/static/login.html';
+            }
+        }
+
+        function logout() {
+            localStorage.removeItem('token');
+            window.location.href = '/static/login.html';
+        }
+
+        // Auto-show calendar/time picker on click
+        ['time_in', 'time_out'].forEach(id => {
+            const input = document.getElementById(id);
+            if (input && input.showPicker) {
+                input.addEventListener('focus', () => {
+                    input.showPicker();
+                });
+            }
+        });
+    </script>
+</body>
+</html>

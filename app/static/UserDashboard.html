@@ -1,0 +1,83 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>User Dashboard</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background-color: #1a1a1a;
+            color: #80ff80;
+            padding: 20px;
+        }
+        .container {
+            background: #000;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #80ff80;
+            max-width: 700px;
+            margin: auto;
+            box-shadow: 0 0 10px rgba(0,255,0,0.3);
+        }
+        h2 {
+            text-align: center;
+            margin-bottom: 30px;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+        }
+        button {
+            width: 100%;
+            padding: 12px;
+            margin: 10px 0;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            cursor: pointer;
+            font-size: 16px;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+    </style>
+</head>
+<body onload="checkAccess(['Subcontractor'])">
+
+<div class="container">
+    <h2>User Dashboard</h2>
+    <button onclick="window.location.href='/static/PropertyInfo.html'">View Properties</button>
+    <button onclick="window.location.href='/static/WinterOpsLog.html'">Submit Winter Log</button>
+    <button onclick="window.location.href='/static/GreenOpsLog.html'">Submit Green Log</button>
+    <button onclick="window.location.href='/static/ViewWinterLogs.html'">View Winter Logs</button>
+    <button onclick="window.location.href='/static/ViewGreenLogs.html'">View Green Logs</button>
+    <button onclick="window.location.href='/static/EquipmentUsageReport.html'">Equipment Usage Report</button>
+    <button onclick="logout()">Logout</button>
+</div>
+
+<script>
+    function checkAccess(allowedRoles) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/static/login.html';
+            return;
+        }
+
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const role = payload.role;
+
+        if (!allowedRoles.includes(role)) {
+            alert("Access denied.");
+            window.location.href = '/static/login.html';
+        }
+    }
+
+    function logout() {
+        localStorage.removeItem('token');
+        window.location.href = '/static/login.html';
+    }
+</script>
+
+</body>
+</html>

@@ -1,0 +1,13 @@
+Page,Admin,Manager,Subcontractor
+AdminDashboard.html,Yes,No,No
+ManageUsers.html,Yes,No,No
+PropertyInfo.html,Yes,Yes,Yes
+ManageWinterProducts.html,Yes,Yes,No
+ManageLandscapeProducts.html,Yes,Yes,No
+WinterOpsLog.html,Yes,Yes,Yes
+GreenOpsLog.html,Yes,Yes,Yes
+Reports.html,Yes,Yes,Yes
+Signup Requests,Yes,No,No
+ManagerDashboard.html,No,Yes,No
+UserDashboard.html,No,No,Yes
+ViewProducts.html,Yes,Yes,Yes

@@ -1,0 +1,242 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Admin Dashboard</title>
+    <script src="/static/config.js"></script>
+    <style>
+      body {
+        background-color: #1a1a1a;
+        color: #80ff80;
+        font-family: 'Courier New', monospace;
+        padding: 20px;
+      }
+
+      h1, h2, h3, h4 {
+        color: #80ff80;
+        border-bottom: 1px solid #80ff80;
+        padding-bottom: 5px;
+        font-weight: normal;
+      }
+
+      input, select, textarea, button {
+        background-color: #000;
+        color: #80ff80;
+        border: 1px solid #80ff80;
+        font-family: 'Courier New', monospace;
+        padding: 8px;
+        margin: 5px 0;
+        width: 100%;
+        box-sizing: border-box;
+      }
+
+      input::placeholder, textarea::placeholder {
+        color: #80ff80;
+        opacity: 0.6;
+      }
+
+      button {
+        cursor: pointer;
+        font-weight: bold;
+      }
+
+      button:hover {
+        background-color: #004400;
+        border-color: #00cc00;
+      }
+
+      table {
+        width: 100%;
+        border-collapse: collapse;
+        background-color: #000;
+        color: #80ff80;
+      }
+
+      th, td {
+        border: 1px solid #80ff80;
+        padding: 10px;
+        text-align: center;
+      }
+
+      th {
+        background-color: #111;
+      }
+
+      a {
+        color: #80ff80;
+        text-decoration: underline;
+      }
+
+      a:hover {
+        color: #00cc00;
+      }
+
+      .container {
+        border: 1px solid #80ff80;
+        padding: 20px;
+        margin: auto;
+        max-width: 800px;
+        background-color: #000;
+      }
+    </style>
+</head>
+<body onload="initializePage()">
+<div class="container">
+  <h2>Admin Dashboard</h2>
+
+  <div class="section">
+    <h3>Manage</h3>
+    <button onclick="window.location.href='/static/PropertyInfo.html'">Manage Properties</button>
+    <button onclick="window.location.href='/static/ManageUsers.html'">Manage Users</button>
+  </div>
+
+  <div class="section">
+    <h3>Settings</h3>
+    <input type="email" id="adminEmail" placeholder="Enter admin email for signup alerts" />
+    <button onclick="updateAdminEmail()">Update Signup Notification Email</button>
+    <p id="emailUpdateMsg"></p>
+  </div>
+
+  <div class="section">
+    <h3>Reports</h3>
+    <button onclick="window.location.href='/static/Reports.html'">Go to Reports</button>
+  </div>
+
+  <div class="section">
+    <h3>Product Management</h3>
+    <button onclick="window.location.href='/static/ManageWinterProducts.html'">Winter Products</button>
+    <button onclick="window.location.href='/static/ManageLandscapeProducts.html'">Landscape Products</button>
+    <button onclick="window.location.href='/static/ManageEquipmentRates.html'">Equipment Rates</button>
+  </div>
+
+  <div class="section">
+    <h3>Submit Logs</h3>
+    <button onclick="window.location.href='/static/WinterOpsLog.html'">Submit Winter Log</button>
+    <button onclick="window.location.href='/static/GreenOpsLog.html'">Submit Green Log</button>
+  </div>
+
+  <div class="section">
+    <h3>View Logs</h3>
+    <button onclick="window.location.href='/static/ViewWinterLogs.html'">View Winter Logs</button>
+    <button onclick="window.location.href='/static/ViewGreenLogs.html'">View Green Logs</button>
+    <button onclick="window.location.href='/static/EquipmentUsageReport.html'">Equipment Usage Report</button>
+  </div>
+
+  <div class="section">
+    <h3>Signup Requests</h3>
+    <table id="signupRequestsTable">
+      <thead>
+        <tr>
+          <th>Select</th>
+          <th>Name</th>
+          <th>Phone</th>
+          <th>Email</th>
+          <th>Role</th>
+          <th>Requested</th>
+        </tr>
+      </thead>
+      <tbody></tbody>
+    </table>
+    <button onclick="approveSelectedRequests()">Approve Selected Users</button>
+    <p id="bulkImportMsg"></p>
+  </div>
+</div>
+
+<script>
+function initializePage() {
+  checkAccess(['Admin']);
+  loadSignupRequests();
+}
+
+async function loadSignupRequests() {
+  const token = localStorage.getItem('token');
+  if (!token) {
+    console.error("No token found.");
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/signup-requests/`, {
+      method: "GET",
+      headers: {
+        "Authorization": `Bearer ${token}`
+      }
+    });
+
+    if (!response.ok) {
+      throw new Error(`Failed to fetch signup requests: ${await response.text()}`);
+    }
+
+    const data = await response.json();
+    console.log("Signup Requests:", data);
+
+    const tableBody = document.querySelector("#signupRequestsTable tbody");
+    tableBody.innerHTML = "";
+    data.forEach(request => {
+      const row = document.createElement("tr");
+      row.innerHTML = `
+        <td><input type="checkbox" value="${request.id}" /></td>
+        <td>${request.name}</td>
+        <td>${request.phone}</td>
+        <td>${request.email}</td>
+        <td>${request.role}</td>
+        <td>${request.timestamp}</td>
+      `;
+      tableBody.appendChild(row);
+    });
+
+  } catch (error) {
+    console.error("Failed to load signup requests:", error);
+  }
+}
+
+async function approveSelectedRequests() {
+  const token = localStorage.getItem('token');
+  const selected = Array.from(document.querySelectorAll('#signupRequestsTable input[type="checkbox"]:checked'))
+    .map(cb => parseInt(cb.value));
+  if (selected.length === 0) {
+    document.getElementById('bulkImportMsg').innerText = "⚠️ Please select at least one request.";
+    return;
+  }
+  const response = await fetch(`${API_BASE_URL}/approve-signup-requests/`, {
+    method: 'POST',
+    headers: {
+      'Content-Type': 'application/json',
+      'Authorization': `Bearer ${token}`
+    },
+    body: JSON.stringify(selected)
+  });
+  if (response.ok) {
+    document.getElementById('bulkImportMsg').innerText = `✅ Approved ${selected.length} user(s) successfully.`;
+    loadSignupRequests();
+  } else {
+    document.getElementById('bulkImportMsg').innerText = "❌ Failed to approve requests.";
+  }
+}
+
+async function updateAdminEmail() {
+  const newEmail = document.getElementById('adminEmail').value;
+  if (!newEmail) {
+    document.getElementById('emailUpdateMsg').innerText = "⚠️ Please enter a valid email.";
+    return;
+  }
+  const formData = new FormData();
+  formData.append("new_email", newEmail);
+  try {
+    const response = await fetch(`${API_BASE_URL}/update-signup-email/`, {
+      method: 'PUT',
+      body: formData
+    });
+    if (response.ok) {
+      document.getElementById('emailUpdateMsg').innerText = "✅ Admin email updated successfully!";
+    } else {
+      const error = await response.text();
+      document.getElementById('emailUpdateMsg').innerText = "❌ Failed to update email: " + error;
+    }
+  } catch (err) {
+    console.error('Error:', err);
+    document.getElementById('emailUpdateMsg').innerText = "❌ Network error!";
+  }
+}
+</script>
+</body>
+</html>

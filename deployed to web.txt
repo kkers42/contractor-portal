@@ -1,0 +1,109 @@
+How Your App is Deployed
+Current Setup: Git-Based Deployment (No Containers)
+Your contractor portal is deployed directly on the VPS using:
+GitHub Repository → Beta Branch
+Code is pulled from: https://github.com/kkers42/contractor-portal.git
+Branch: beta
+Location on VPS: /opt/contractor-portal
+Python Virtual Environment
+Python dependencies installed in: /opt/contractor-portal/venv
+Isolated from system Python
+Systemd Service
+Service name: contractor-portal
+Runs automatically on boot
+Manages app lifecycle
+Nginx Reverse Proxy
+Routes https://snow-contractor.com → localhost:8000
+Handles SSL certificates
+Serves static files
+MySQL Database
+Database: contractor_portal
+Runs directly on VPS
+Updating the App (How Easy Is It?)
+✅ Super Easy Updates! Here's how:
+Method 1: SSH Update (Manual - 30 seconds)
+ssh root@72.61.0.186
+cd /opt/contractor-portal
+git pull origin beta
+source venv/bin/activate
+pip install -r requirements.txt  # Only if dependencies changed
+systemctl restart contractor-portal
+Method 2: Via Claude Code MCP (Even Easier!)
+You can use the MCP tool I built:
+"Restart contractor portal on VPS 72.61.0.186"
+Method 3: Full Re-deployment (If major changes)
+Just re-run the deployment script - it preserves your database and updates code:
+ssh root@72.61.0.186 "bash /tmp/deploy.sh"
+Update Process Breakdown
+What Changes	Need to Do	Downtime
+Code only (routes, HTML, JS)	git pull + restart service	~2 seconds
+Dependencies (requirements.txt)	git pull + pip install + restart	~30 seconds
+Database schema	Run migration SQL + restart	~1 minute
+Environment config (.env)	Edit .env + restart	~5 seconds
+Comparison: Current vs Container Setup
+Current Setup (Git-Based)
+✅ Pros:
+Simple, straightforward
+Fast updates (git pull + restart)
+Easy to debug (everything in one place)
+Low overhead
+❌ Cons:
+Manual dependency management
+Need to handle migrations manually
+Shares VPS resources with n8n
+Container Setup (Docker)
+✅ Pros:
+Complete isolation
+Easy rollbacks (switch images)
+Portable across servers
+Cleaner dependency management
+❌ Cons:
+More complex setup
+Slightly more overhead
+Need to learn Docker commands
+Already using Traefik (which complicates things)
+Recommended Update Workflow
+For Regular Updates:
+Push code to GitHub beta branch:
+git add .
+git commit -m "Update feature X"
+git push origin beta
+Pull and restart on VPS:
+ssh root@72.61.0.186
+cd /opt/contractor-portal
+git pull origin beta
+systemctl restart contractor-portal
+Verify it works:
+curl https://snow-contractor.com
+For Database Changes:
+Create migration file in db/migrations/:
+-- db/migrations/004_add_new_feature.sql
+ALTER TABLE users ADD COLUMN phone VARCHAR(20);
+Run migration on VPS:
+ssh root@72.61.0.186
+cd /opt/contractor-portal
+mysql -u contractor -pBimmer325i contractor_portal < db/migrations/004_add_new_feature.sql
+CI/CD Automation (Future Enhancement)
+Want zero-touch updates? We could set up:
+GitHub Actions Workflow:
+# .github/workflows/deploy.yml
+on:
+  push:
+    branches: [beta]
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Deploy to VPS
+        run: |
+          ssh root@72.61.0.186 "cd /opt/contractor-portal && git pull && systemctl restart contractor-portal"
+Then every push to beta auto-deploys! No manual SSH needed.
+Summary: Difficulty Level
+Update Difficulty: 🟢 VERY EASY (2/10) Current setup is perfect for continuous updates:
+Push to GitHub ✅
+SSH + 2 commands ✅
+App restarts in 2 seconds ✅
+You're not locked into anything complex. The git-based approach is actually ideal for rapid iteration and updates. Want me to:
+Set up GitHub Actions for auto-deployment?
+Create an update script to make it even easier?
+Migrate to Docker (only if you really want it)?
