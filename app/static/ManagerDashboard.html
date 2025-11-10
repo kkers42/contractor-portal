@@ -28,7 +28,7 @@
       margin: 0;
       padding: 20px;
     }
-    h1 {
+    h1, h2 {
       color: #00ff00;
     }
     .button {
@@ -43,6 +43,40 @@
     }
     .button:hover {
       background-color: #003300;
+    }
+    .password-section {
+      margin: 30px auto;
+      max-width: 400px;
+      border: 1px solid #33ff33;
+      padding: 20px;
+      background-color: #000;
+    }
+    .password-section input {
+      width: 100%;
+      padding: 8px;
+      margin: 5px 0;
+      background-color: #000;
+      color: #33ff33;
+      border: 1px solid #33ff33;
+      font-family: 'Courier New', Courier, monospace;
+      box-sizing: border-box;
+    }
+    .password-section button {
+      width: 100%;
+      padding: 10px;
+      margin: 10px 0;
+      background-color: #000;
+      color: #33ff33;
+      border: 1px solid #33ff33;
+      cursor: pointer;
+      font-family: 'Courier New', Courier, monospace;
+    }
+    .password-section button:hover {
+      background-color: #003300;
+    }
+    #passwordChangeMsg {
+      margin-top: 10px;
+      font-size: 14px;
     }
   </style>
 </head>
@@ -60,6 +94,75 @@
   <a href="/static/ManageEquipmentRates.html" class="button">Manage Equipment Rates</a>
   <a href="/static/EquipmentUsageReport.html" class="button">Equipment Usage Report</a>
   <br>
+
+  <div class="password-section">
+    <h2>Change Password</h2>
+    <input type="password" id="currentPassword" placeholder="Current Password" />
+    <input type="password" id="newPassword" placeholder="New Password" />
+    <input type="password" id="confirmPassword" placeholder="Confirm New Password" />
+    <button onclick="changePassword()">Change Password</button>
+    <p id="passwordChangeMsg"></p>
+  </div>
+
   <a href="/static/Home.html" class="button">Return Home</a>
+
+  <script>
+    async function changePassword() {
+      const currentPassword = document.getElementById('currentPassword').value;
+      const newPassword = document.getElementById('newPassword').value;
+      const confirmPassword = document.getElementById('confirmPassword').value;
+      const msgElement = document.getElementById('passwordChangeMsg');
+
+      if (!currentPassword || !newPassword || !confirmPassword) {
+        msgElement.innerText = "⚠️ Please fill in all password fields.";
+        return;
+      }
+
+      if (newPassword !== confirmPassword) {
+        msgElement.innerText = "⚠️ New passwords do not match.";
+        return;
+      }
+
+      if (newPassword.length < 8) {
+        msgElement.innerText = "⚠️ New password must be at least 8 characters long.";
+        return;
+      }
+
+      const token = localStorage.getItem('token');
+      if (!token) {
+        msgElement.innerText = "❌ Not authenticated. Please log in again.";
+        window.location.href = '/static/login.html';
+        return;
+      }
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/api/change-password/`, {
+          method: 'POST',
+          headers: {
+            'Content-Type': 'application/json',
+            'Authorization': `Bearer ${token}`
+          },
+          body: JSON.stringify({
+            current_password: currentPassword,
+            new_password: newPassword
+          })
+        });
+
+        const result = await response.json();
+
+        if (response.ok && result.ok) {
+          msgElement.innerText = "✅ Password changed successfully!";
+          document.getElementById('currentPassword').value = '';
+          document.getElementById('newPassword').value = '';
+          document.getElementById('confirmPassword').value = '';
+        } else {
+          msgElement.innerText = "❌ " + (result.detail || result.message || "Failed to change password");
+        }
+      } catch (err) {
+        console.error('Error:', err);
+        msgElement.innerText = "❌ Network error!";
+      }
+    }
+  </script>
 </body>
 </html>

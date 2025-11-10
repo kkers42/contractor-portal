@@ -168,10 +168,20 @@
                 const equipment = await response.json();
                 const select = document.getElementById('service');
 
+                // Get user role to determine if we should show pricing
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const userRole = payload.role;
+                const showPricing = (userRole === 'Admin' || userRole === 'Manager');
+
                 equipment.forEach(eq => {
                     const option = document.createElement('option');
                     option.value = eq.equipment_name;
-                    option.textContent = `${eq.equipment_name} ($${eq.hourly_rate}/hr)`;
+                    // Only show pricing to Admin and Manager roles
+                    if (showPricing) {
+                        option.textContent = `${eq.equipment_name} ($${eq.hourly_rate}/hr)`;
+                    } else {
+                        option.textContent = eq.equipment_name;
+                    }
                     select.appendChild(option);
                 });
             } catch (error) {

@@ -20,13 +20,13 @@
             margin: auto;
             box-shadow: 0 0 10px rgba(0,255,0,0.3);
         }
-        h2 {
+        h2, h3 {
             text-align: center;
             margin-bottom: 30px;
             border-bottom: 1px solid #80ff80;
             padding-bottom: 10px;
         }
-        button {
+        button, input[type="password"] {
             width: 100%;
             padding: 12px;
             margin: 10px 0;
@@ -36,10 +36,23 @@
             cursor: pointer;
             font-size: 16px;
             font-family: 'Courier New', monospace;
+            box-sizing: border-box;
+        }
+        input[type="password"] {
+            cursor: text;
         }
         button:hover {
             background-color: #004400;
             border-color: #00cc00;
+        }
+        .password-section {
+            margin-top: 30px;
+            padding-top: 30px;
+            border-top: 1px solid #80ff80;
+        }
+        #passwordChangeMsg {
+            text-align: center;
+            margin-top: 10px;
         }
     </style>
 </head>
@@ -53,6 +66,16 @@
     <button onclick="window.location.href='/static/ViewWinterLogs.html'">View Winter Logs</button>
     <button onclick="window.location.href='/static/ViewGreenLogs.html'">View Green Logs</button>
     <button onclick="window.location.href='/static/EquipmentUsageReport.html'">Equipment Usage Report</button>
+
+    <div class="password-section">
+        <h3>Change Password</h3>
+        <input type="password" id="currentPassword" placeholder="Current Password" />
+        <input type="password" id="newPassword" placeholder="New Password" />
+        <input type="password" id="confirmPassword" placeholder="Confirm New Password" />
+        <button onclick="changePassword()">Change Password</button>
+        <p id="passwordChangeMsg"></p>
+    </div>
+
     <button onclick="logout()">Logout</button>
 </div>
 
@@ -76,6 +99,63 @@
     function logout() {
         localStorage.removeItem('token');
         window.location.href = '/static/login.html';
+    }
+
+    async function changePassword() {
+        const currentPassword = document.getElementById('currentPassword').value;
+        const newPassword = document.getElementById('newPassword').value;
+        const confirmPassword = document.getElementById('confirmPassword').value;
+        const msgElement = document.getElementById('passwordChangeMsg');
+
+        if (!currentPassword || !newPassword || !confirmPassword) {
+            msgElement.innerText = "⚠️ Please fill in all password fields.";
+            return;
+        }
+
+        if (newPassword !== confirmPassword) {
+            msgElement.innerText = "⚠️ New passwords do not match.";
+            return;
+        }
+
+        if (newPassword.length < 8) {
+            msgElement.innerText = "⚠️ New password must be at least 8 characters long.";
+            return;
+        }
+
+        const token = localStorage.getItem('token');
+        if (!token) {
+            msgElement.innerText = "❌ Not authenticated. Please log in again.";
+            window.location.href = '/static/login.html';
+            return;
+        }
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/api/change-password/`, {
+                method: 'POST',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${token}`
+                },
+                body: JSON.stringify({
+                    current_password: currentPassword,
+                    new_password: newPassword
+                })
+            });
+
+            const result = await response.json();
+
+            if (response.ok && result.ok) {
+                msgElement.innerText = "✅ Password changed successfully!";
+                document.getElementById('currentPassword').value = '';
+                document.getElementById('newPassword').value = '';
+                document.getElementById('confirmPassword').value = '';
+            } else {
+                msgElement.innerText = "❌ " + (result.detail || result.message || "Failed to change password");
+            }
+        } catch (err) {
+            console.error('Error:', err);
+            msgElement.innerText = "❌ Network error!";
+        }
     }
 </script>
 

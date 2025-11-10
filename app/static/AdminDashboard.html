@@ -97,6 +97,15 @@
   </div>
 
   <div class="section">
+    <h3>Change Password</h3>
+    <input type="password" id="currentPassword" placeholder="Current Password" />
+    <input type="password" id="newPassword" placeholder="New Password" />
+    <input type="password" id="confirmPassword" placeholder="Confirm New Password" />
+    <button onclick="changePassword()">Change Password</button>
+    <p id="passwordChangeMsg"></p>
+  </div>
+
+  <div class="section">
     <h3>Reports</h3>
     <button onclick="window.location.href='/static/Reports.html'">Go to Reports</button>
   </div>
@@ -235,6 +244,63 @@ async function updateAdminEmail() {
   } catch (err) {
     console.error('Error:', err);
     document.getElementById('emailUpdateMsg').innerText = "❌ Network error!";
+  }
+}
+
+async function changePassword() {
+  const currentPassword = document.getElementById('currentPassword').value;
+  const newPassword = document.getElementById('newPassword').value;
+  const confirmPassword = document.getElementById('confirmPassword').value;
+  const msgElement = document.getElementById('passwordChangeMsg');
+
+  if (!currentPassword || !newPassword || !confirmPassword) {
+    msgElement.innerText = "⚠️ Please fill in all password fields.";
+    return;
+  }
+
+  if (newPassword !== confirmPassword) {
+    msgElement.innerText = "⚠️ New passwords do not match.";
+    return;
+  }
+
+  if (newPassword.length < 8) {
+    msgElement.innerText = "⚠️ New password must be at least 8 characters long.";
+    return;
+  }
+
+  const token = localStorage.getItem('token');
+  if (!token) {
+    msgElement.innerText = "❌ Not authenticated. Please log in again.";
+    window.location.href = '/static/login.html';
+    return;
+  }
+
+  try {
+    const response = await fetch(`${API_BASE_URL}/api/change-password/`, {
+      method: 'POST',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${token}`
+      },
+      body: JSON.stringify({
+        current_password: currentPassword,
+        new_password: newPassword
+      })
+    });
+
+    const result = await response.json();
+
+    if (response.ok && result.ok) {
+      msgElement.innerText = "✅ Password changed successfully!";
+      document.getElementById('currentPassword').value = '';
+      document.getElementById('newPassword').value = '';
+      document.getElementById('confirmPassword').value = '';
+    } else {
+      msgElement.innerText = "❌ " + (result.detail || result.message || "Failed to change password");
+    }
+  } catch (err) {
+    console.error('Error:', err);
+    msgElement.innerText = "❌ Network error!";
   }
 }
 </script>

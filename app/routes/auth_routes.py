@@ -218,7 +218,7 @@ def reactivate_user(user_id: int, current_user: dict = Depends(get_current_user)
     """Reactivate a suspended user"""
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=403, detail="Admins only!")
-    
+
     try:
         execute_query(
             "UPDATE users SET status = 'active', updated_at = NOW() WHERE id = %s",
@@ -227,3 +227,47 @@ def reactivate_user(user_id: int, current_user: dict = Depends(get_current_user)
         return {"ok": True, "message": "User reactivated"}
     except Exception as e:
         return {"ok": False, "message": f"Failed to reactivate user: {str(e)}"}
+
+class ChangePasswordRequest(BaseModel):
+    current_password: str
+    new_password: str
+
+@router.post("/api/change-password/")
+def change_password(
+    request: ChangePasswordRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Allow any authenticated user to change their own password"""
+    email = current_user.get("sub")
+
+    if not email:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    try:
+        # Fetch user from database
+        user = fetch_query("SELECT * FROM users WHERE email = %s", (email,))
+
+        if not user:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user = user[0]
+
+        # Verify current password
+        if not verify_password(request.current_password, user['password']):
+            raise HTTPException(status_code=401, detail="Current password is incorrect")
+
+        # Hash new password
+        new_password_hash = hash_password(request.new_password)
+
+        # Update password in database
+        execute_query(
+            "UPDATE users SET password = %s, password_hash = %s, updated_at = NOW() WHERE email = %s",
+            (new_password_hash, new_password_hash, email)
+        )
+
+        return {"ok": True, "message": "Password changed successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] Failed to change password: {str(e)}")
+        return {"ok": False, "message": f"Failed to change password: {str(e)}"}

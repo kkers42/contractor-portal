@@ -201,8 +201,22 @@
 let properties = [];
 let contractors = [];
 let equipmentList = [];
+let showPricing = false; // Global flag for pricing visibility
 
 async function initializePage() {
+    // Check user role for pricing visibility
+    const token = localStorage.getItem('token');
+    if (token) {
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const userRole = payload.role;
+        showPricing = (userRole === 'Admin' || userRole === 'Manager');
+
+        // Hide pricing columns if user is not Admin/Manager
+        if (!showPricing) {
+            hidePricingColumns();
+        }
+    }
+
     await Promise.all([
         fetchProperties(),
         fetchContractors(),
@@ -215,6 +229,24 @@ async function initializePage() {
     const thirtyDaysAgo = new Date(today.getTime() - (30 * 24 * 60 * 60 * 1000));
     document.getElementById('endDate').value = today.toISOString().split('T')[0];
     document.getElementById('startDate').value = thirtyDaysAgo.toISOString().split('T')[0];
+}
+
+function hidePricingColumns() {
+    // Hide "Total Cost" summary item
+    const summaryItems = document.querySelectorAll('.summary-item');
+    summaryItems.forEach(item => {
+        if (item.textContent.includes('Total Cost')) {
+            item.style.display = 'none';
+        }
+    });
+
+    // Hide "Hourly Rate" and "Total Cost" columns in table header
+    const tableHeaders = document.querySelectorAll('th');
+    tableHeaders.forEach((header, index) => {
+        if (header.textContent === 'Hourly Rate' || header.textContent === 'Total Cost') {
+            header.style.display = 'none';
+        }
+    });
 }
 
 async function fetchProperties() {
@@ -334,15 +366,28 @@ function renderReport(data) {
         totalHours += hours;
         totalCost += cost;
 
-        return `
-            <tr>
-                <td>${item.equipment}</td>
-                <td>$${parseFloat(item.hourly_rate || 0).toFixed(2)}/hr</td>
-                <td>${uses}</td>
-                <td>${hours.toFixed(2)}</td>
-                <td class="cost-column">$${cost.toFixed(2)}</td>
-            </tr>
-        `;
+        // Conditionally include pricing columns based on user role
+        if (showPricing) {
+            return `
+                <tr>
+                    <td>${item.equipment}</td>
+                    <td>$${parseFloat(item.hourly_rate || 0).toFixed(2)}/hr</td>
+                    <td>${uses}</td>
+                    <td>${hours.toFixed(2)}</td>
+                    <td class="cost-column">$${cost.toFixed(2)}</td>
+                </tr>
+            `;
+        } else {
+            return `
+                <tr>
+                    <td>${item.equipment}</td>
+                    <td style="display: none;"></td>
+                    <td>${uses}</td>
+                    <td>${hours.toFixed(2)}</td>
+                    <td style="display: none;"></td>
+                </tr>
+            `;
+        }
     }).join('');
 
     // Update summary
@@ -350,7 +395,10 @@ function renderReport(data) {
     document.getElementById('totalEquipment').textContent = data.length;
     document.getElementById('totalUses').textContent = totalUses;
     document.getElementById('totalHours').textContent = totalHours.toFixed(2);
-    document.getElementById('totalCost').textContent = `$${totalCost.toFixed(2)}`;
+
+    if (showPricing) {
+        document.getElementById('totalCost').textContent = `$${totalCost.toFixed(2)}`;
+    }
 }
 
 function clearFilters() {
