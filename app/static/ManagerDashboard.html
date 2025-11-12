@@ -1,8 +1,10 @@
 <!DOCTYPE html>
 <html>
 <head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
   <title>Manager Dashboard - Contractor Portal</title>
   <script src="/static/config.js"></script>
+  <link rel="stylesheet" href="/static/mobile-responsive.css">
   <script>
     function checkAccess(allowedRoles) {
       const token = localStorage.getItem('token');
@@ -83,6 +85,7 @@
 <body>
   <h1>Manager Dashboard</h1>
   <a href="/static/PropertyInfo.html" class="button">View Properties</a>
+  <a href="/static/PropertyBoard.html" class="button">📍 Property Board (Assign Contractors)</a>
   <a href="/static/Reports.html" class="button">Generate Reports</a>
   <br>
   <a href="/static/WinterOpsLog.html" class="button">Submit Winter Log</a>

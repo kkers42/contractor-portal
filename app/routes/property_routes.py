@@ -205,3 +205,189 @@ async def bulk_import_properties(
         raise HTTPException(status_code=400, detail=str(e))
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to import properties: {str(e)}")
+
+# ===== PROPERTY-CONTRACTOR ASSIGNMENT ROUTES (KANBAN BOARD) =====
+
+@router.get("/properties/board/")
+def get_property_board(current_user: dict = Depends(get_current_user)):
+    """
+    Get all properties with their assigned contractors for Kanban board view.
+    Returns properties with nested contractor lists.
+    """
+    try:
+        # Get all properties
+        properties_query = """
+            SELECT id, name, address, sqft, area_manager, plow, salt
+            FROM locations
+            ORDER BY name
+        """
+        properties = fetch_query(properties_query)
+
+        if not properties:
+            return []
+
+        # Get all contractor assignments grouped by property
+        assignments_query = """
+            SELECT
+                pc.property_id,
+                pc.contractor_id,
+                pc.is_primary,
+                pc.assigned_date,
+                u.name as contractor_name,
+                u.email as contractor_email,
+                u.role as contractor_role,
+                u.phone as contractor_phone
+            FROM property_contractors pc
+            JOIN users u ON pc.contractor_id = u.id
+            WHERE u.status = 'active'
+            ORDER BY pc.is_primary DESC, u.name
+        """
+        assignments = fetch_query(assignments_query)
+
+        # Group contractors by property
+        contractors_by_property = {}
+        if assignments:
+            for assignment in assignments:
+                prop_id = assignment['property_id']
+                if prop_id not in contractors_by_property:
+                    contractors_by_property[prop_id] = []
+                contractors_by_property[prop_id].append({
+                    'contractor_id': assignment['contractor_id'],
+                    'name': assignment['contractor_name'],
+                    'email': assignment['contractor_email'],
+                    'role': assignment['contractor_role'],
+                    'phone': assignment['contractor_phone'],
+                    'is_primary': assignment['is_primary'],
+                    'assigned_date': assignment['assigned_date'].isoformat() if assignment['assigned_date'] else None
+                })
+
+        # Attach contractors to each property
+        for prop in properties:
+            prop['contractors'] = contractors_by_property.get(prop['id'], [])
+
+        return properties
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch property board: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch property board: {str(e)}")
+
+@router.get("/properties/{property_id}/contractors/")
+def get_property_contractors(property_id: int, current_user: dict = Depends(get_current_user)):
+    """Get all contractors assigned to a specific property"""
+    query = """
+        SELECT
+            pc.id as assignment_id,
+            pc.contractor_id,
+            pc.is_primary,
+            pc.assigned_date,
+            u.name,
+            u.email,
+            u.role,
+            u.phone
+        FROM property_contractors pc
+        JOIN users u ON pc.contractor_id = u.id
+        WHERE pc.property_id = %s AND u.status = 'active'
+        ORDER BY pc.is_primary DESC, u.name
+    """
+    try:
+        contractors = fetch_query(query, (property_id,))
+        return contractors if contractors else []
+    except Exception as e:
+        print(f"[ERROR] Failed to fetch contractors for property: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to fetch contractors: {str(e)}")
+
+class PropertyContractorAssignment(BaseModel):
+    contractor_id: int
+    is_primary: bool = False
+
+@router.post("/properties/{property_id}/contractors/")
+def assign_contractor_to_property(
+    property_id: int,
+    assignment: PropertyContractorAssignment,
+    current_user: dict = Depends(get_current_user)
+):
+    """Assign a contractor to a property"""
+    if current_user["role"] not in ["Admin", "Manager"]:
+        raise HTTPException(status_code=403, detail="Only Admins and Managers can assign contractors")
+
+    # Check if property exists
+    prop_check = fetch_query("SELECT id FROM locations WHERE id = %s", (property_id,))
+    if not prop_check:
+        raise HTTPException(status_code=404, detail="Property not found")
+
+    # Check if contractor exists and is active
+    contractor_check = fetch_query(
+        "SELECT id, role FROM users WHERE id = %s AND status = 'active'",
+        (assignment.contractor_id,)
+    )
+    if not contractor_check:
+        raise HTTPException(status_code=404, detail="Contractor not found or inactive")
+
+    # Check if contractor has appropriate role
+    if contractor_check[0]['role'] not in ['Contractor', 'Manager', 'Subcontractor']:
+        raise HTTPException(status_code=400, detail="User must be a Contractor, Manager, or Subcontractor")
+
+    # Check if assignment already exists
+    existing = fetch_query(
+        "SELECT id FROM property_contractors WHERE property_id = %s AND contractor_id = %s",
+        (property_id, assignment.contractor_id)
+    )
+    if existing:
+        raise HTTPException(status_code=400, detail="Contractor is already assigned to this property")
+
+    # Insert assignment
+    query = """
+        INSERT INTO property_contractors (property_id, contractor_id, is_primary)
+        VALUES (%s, %s, %s)
+    """
+    try:
+        execute_query(query, (property_id, assignment.contractor_id, assignment.is_primary))
+        return {"message": "Contractor assigned successfully"}
+    except Exception as e:
+        print(f"[ERROR] Failed to assign contractor: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to assign contractor: {str(e)}")
+
+@router.delete("/properties/{property_id}/contractors/{contractor_id}")
+def remove_contractor_from_property(
+    property_id: int,
+    contractor_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Remove a contractor assignment from a property"""
+    if current_user["role"] not in ["Admin", "Manager"]:
+        raise HTTPException(status_code=403, detail="Only Admins and Managers can remove contractors")
+
+    query = "DELETE FROM property_contractors WHERE property_id = %s AND contractor_id = %s"
+    try:
+        execute_query(query, (property_id, contractor_id))
+        return {"message": "Contractor removed from property"}
+    except Exception as e:
+        print(f"[ERROR] Failed to remove contractor: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to remove contractor: {str(e)}")
+
+@router.put("/properties/{property_id}/contractors/{contractor_id}/primary")
+def set_primary_contractor(
+    property_id: int,
+    contractor_id: int,
+    current_user: dict = Depends(get_current_user)
+):
+    """Set a contractor as the primary contractor for a property"""
+    if current_user["role"] not in ["Admin", "Manager"]:
+        raise HTTPException(status_code=403, detail="Only Admins and Managers can set primary contractors")
+
+    try:
+        # First, unset all primary contractors for this property
+        execute_query(
+            "UPDATE property_contractors SET is_primary = FALSE WHERE property_id = %s",
+            (property_id,)
+        )
+
+        # Then set this contractor as primary
+        execute_query(
+            "UPDATE property_contractors SET is_primary = TRUE WHERE property_id = %s AND contractor_id = %s",
+            (property_id, contractor_id)
+        )
+
+        return {"message": "Primary contractor updated"}
+    except Exception as e:
+        print(f"[ERROR] Failed to set primary contractor: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to set primary contractor: {str(e)}")

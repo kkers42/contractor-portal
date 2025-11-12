@@ -1,0 +1,234 @@
+/* Mobile-Responsive CSS for Contractor Portal */
+/* Add this to all pages with: <link rel="stylesheet" href="/static/mobile-responsive.css"> */
+
+/* Viewport meta tag should be in HTML head:
+   <meta name="viewport" content="width=device-width, initial-scale=1.0">
+*/
+
+/* Base responsive settings */
+* {
+    box-sizing: border-box;
+}
+
+/* Mobile-first approach */
+@media screen and (max-width: 768px) {
+    /* Body adjustments */
+    body {
+        padding: 10px !important;
+        font-size: 14px;
+        overflow-x: hidden;
+    }
+
+    /* Container adjustments */
+    .container {
+        max-width: 100% !important;
+        padding: 15px !important;
+        margin: 0 !important;
+    }
+
+    /* Headings */
+    h1 {
+        font-size: 20px !important;
+    }
+
+    h2 {
+        font-size: 18px !important;
+    }
+
+    h3 {
+        font-size: 16px !important;
+    }
+
+    h4 {
+        font-size: 14px !important;
+    }
+
+    /* Buttons */
+    button, .button, input[type="submit"] {
+        width: 100% !important;
+        padding: 12px 8px !important;
+        margin: 8px 0 !important;
+        font-size: 14px !important;
+        display: block !important;
+    }
+
+    /* Forms */
+    input, select, textarea {
+        width: 100% !important;
+        padding: 10px !important;
+        margin: 5px 0 !important;
+        font-size: 14px !important;
+    }
+
+    /* Tables - make them scrollable */
+    table {
+        display: block;
+        overflow-x: auto;
+        white-space: nowrap;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    th, td {
+        padding: 8px 4px !important;
+        font-size: 12px !important;
+    }
+
+    /* Sections */
+    .section {
+        margin-bottom: 15px !important;
+    }
+
+    /* Property Board specific */
+    .board-container {
+        padding: 10px 5px !important;
+    }
+
+    .property-column {
+        min-width: 250px !important;
+        max-width: 250px !important;
+        padding: 10px !important;
+    }
+
+    .property-name {
+        font-size: 14px !important;
+    }
+
+    .property-address {
+        font-size: 11px !important;
+    }
+
+    /* Header adjustments */
+    .header {
+        flex-direction: column !important;
+        align-items: stretch !important;
+        padding: 10px !important;
+    }
+
+    .header h1 {
+        margin-bottom: 10px !important;
+    }
+
+    .back-btn {
+        width: 100% !important;
+    }
+
+    /* Navigation links */
+    a.button {
+        display: block !important;
+        margin: 8px 0 !important;
+        width: 100% !important;
+        text-align: center;
+    }
+
+    /* Password section */
+    .password-section {
+        max-width: 100% !important;
+        padding: 15px !important;
+        margin: 20px 0 !important;
+    }
+
+    /* Reports and admin sections */
+    .report-form, .admin-form {
+        padding: 10px !important;
+    }
+
+    /* Contractor cards */
+    .contractor-card {
+        padding: 8px !important;
+        margin-bottom: 8px !important;
+    }
+
+    /* Remove excessive margins on mobile */
+    .section > * {
+        margin: 5px 0 !important;
+    }
+
+    /* Make inline buttons stack vertically */
+    .button-group {
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Adjust log entries for mobile */
+    .log-entry {
+        padding: 10px !important;
+        margin: 5px 0 !important;
+    }
+
+    /* Product management tables */
+    .product-table {
+        font-size: 11px !important;
+    }
+}
+
+/* Tablet adjustments (768px - 1024px) */
+@media screen and (min-width: 769px) and (max-width: 1024px) {
+    body {
+        padding: 15px;
+    }
+
+    .container {
+        max-width: 90%;
+    }
+
+    button, .button {
+        width: auto;
+        min-width: 150px;
+    }
+
+    .property-column {
+        min-width: 260px;
+        max-width: 260px;
+    }
+}
+
+/* Touch-friendly improvements for all mobile devices */
+@media (hover: none) and (pointer: coarse) {
+    /* Increase touch targets */
+    button, .button, a, input[type="submit"], input[type="button"] {
+        min-height: 44px !important;
+        padding: 12px !important;
+    }
+
+    /* Better spacing for touch */
+    input, select, textarea {
+        min-height: 44px !important;
+    }
+
+    /* Remove hover effects on touch devices */
+    button:hover, .button:hover {
+        background-color: inherit;
+    }
+}
+
+/* Landscape mode on mobile */
+@media screen and (max-width: 768px) and (orientation: landscape) {
+    body {
+        padding: 5px;
+    }
+
+    .container {
+        padding: 10px;
+    }
+
+    h1, h2, h3 {
+        margin: 5px 0;
+    }
+}
+
+/* Print styles */
+@media print {
+    .back-btn, .button, button {
+        display: none !important;
+    }
+
+    body {
+        background-color: white !important;
+        color: black !important;
+    }
+
+    table {
+        width: 100%;
+        font-size: 10pt;
+    }
+}

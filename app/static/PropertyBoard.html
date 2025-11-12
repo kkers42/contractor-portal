@@ -1,0 +1,538 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Board - Contractor Portal</title>
+    <script src="/static/config.js"></script>
+    <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #80ff80;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1, h2, h3 {
+            color: #80ff80;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 5px;
+            font-weight: normal;
+        }
+
+        .header {
+            border: 1px solid #80ff80;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            border: none;
+        }
+
+        .back-btn {
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+        }
+
+        .back-btn:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+
+        .board-container {
+            display: flex;
+            overflow-x: auto;
+            padding-bottom: 20px;
+            gap: 15px;
+            min-height: 500px;
+        }
+
+        .property-column {
+            min-width: 280px;
+            max-width: 280px;
+            background-color: #000;
+            border: 1px solid #80ff80;
+            padding: 15px;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .property-header {
+            margin-bottom: 15px;
+            padding-bottom: 10px;
+            border-bottom: 1px solid #80ff80;
+        }
+
+        .property-name {
+            font-weight: bold;
+            font-size: 16px;
+            margin-bottom: 5px;
+            color: #00cc00;
+        }
+
+        .property-address {
+            font-size: 12px;
+            opacity: 0.8;
+            margin-bottom: 5px;
+        }
+
+        .property-details {
+            font-size: 11px;
+            opacity: 0.6;
+        }
+
+        .contractor-card {
+            background-color: #0a0a0a;
+            border: 1px solid #80ff80;
+            padding: 10px;
+            margin-bottom: 10px;
+            position: relative;
+        }
+
+        .contractor-card.primary {
+            border-color: #00cc00;
+            border-width: 2px;
+        }
+
+        .contractor-name {
+            font-weight: bold;
+            margin-bottom: 5px;
+            color: #80ff80;
+        }
+
+        .contractor-role {
+            font-size: 11px;
+            opacity: 0.7;
+            margin-bottom: 3px;
+        }
+
+        .contractor-email {
+            font-size: 10px;
+            opacity: 0.6;
+        }
+
+        .primary-badge {
+            background-color: #00cc00;
+            color: #000;
+            padding: 2px 6px;
+            font-size: 10px;
+            font-weight: bold;
+            margin-left: 5px;
+            border-radius: 3px;
+        }
+
+        .remove-btn {
+            background-color: #440000;
+            color: #ff8080;
+            border: 1px solid #ff8080;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        .remove-btn:hover {
+            background-color: #660000;
+            border-color: #ff0000;
+        }
+
+        .add-contractor-section {
+            margin-top: auto;
+            padding-top: 10px;
+            border-top: 1px solid #80ff80;
+        }
+
+        .add-contractor-select {
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            font-family: 'Courier New', monospace;
+            padding: 8px;
+            width: 100%;
+            margin-bottom: 8px;
+            font-size: 12px;
+        }
+
+        .add-btn {
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            padding: 8px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            width: 100%;
+        }
+
+        .add-btn:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+
+        .add-btn:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+        }
+
+        .message {
+            text-align: center;
+            padding: 50px;
+            font-size: 14px;
+        }
+
+        .loading {
+            color: #00cc00;
+        }
+
+        .error {
+            color: #ff8080;
+        }
+
+        .no-contractors {
+            opacity: 0.5;
+            font-size: 12px;
+            text-align: center;
+            padding: 20px 0;
+        }
+
+        /* Scrollbar styling */
+        .board-container::-webkit-scrollbar {
+            height: 12px;
+        }
+
+        .board-container::-webkit-scrollbar-track {
+            background: #000;
+            border: 1px solid #80ff80;
+        }
+
+        .board-container::-webkit-scrollbar-thumb {
+            background: #80ff80;
+        }
+
+        .board-container::-webkit-scrollbar-thumb:hover {
+            background: #00cc00;
+        }
+
+        .set-primary-btn {
+            background-color: #003300;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            padding: 5px 10px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-size: 11px;
+            margin-top: 5px;
+            width: 100%;
+        }
+
+        .set-primary-btn:hover {
+            background-color: #005500;
+            border-color: #00cc00;
+        }
+    </style>
+</head>
+<body onload="initializePage()">
+    <div class="header">
+        <h1>📍 Property Board</h1>
+        <button class="back-btn" onclick="goBack()">← Back to Dashboard</button>
+    </div>
+
+    <div id="boardContainer" class="board-container">
+        <div class="message loading">Loading property board...</div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.API_CONFIG?.BASE_URL || 'http://localhost:8000';
+        let allContractors = [];
+        let currentUserRole = null;
+
+        async function initializePage() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/static/login.html';
+                return;
+            }
+
+            // Get user role from token
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                currentUserRole = payload.role;
+            } catch (e) {
+                console.error('Failed to decode token:', e);
+                window.location.href = '/static/login.html';
+                return;
+            }
+
+            // Only Admin and Manager can manage assignments
+            if (currentUserRole !== 'Admin' && currentUserRole !== 'Manager') {
+                document.getElementById('boardContainer').innerHTML =
+                    '<div class="message error">⚠️ Access Denied: Only Admins and Managers can access this page.</div>';
+                return;
+            }
+
+            await loadAllContractors();
+            await loadPropertyBoard();
+        }
+
+        async function loadAllContractors() {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${API_BASE_URL}/contractors/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    allContractors = await response.json();
+                } else {
+                    console.error('Failed to load contractors');
+                }
+            } catch (error) {
+                console.error('Error loading contractors:', error);
+            }
+        }
+
+        async function loadPropertyBoard() {
+            const token = localStorage.getItem('token');
+            const container = document.getElementById('boardContainer');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/properties/board/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load property board');
+                }
+
+                const properties = await response.json();
+
+                if (properties.length === 0) {
+                    container.innerHTML = '<div class="message">No properties found. Add properties first.</div>';
+                    return;
+                }
+
+                // Clear container
+                container.innerHTML = '';
+
+                // Create a column for each property
+                properties.forEach(property => {
+                    const column = createPropertyColumn(property);
+                    container.appendChild(column);
+                });
+
+            } catch (error) {
+                console.error('Error loading property board:', error);
+                container.innerHTML = '<div class="message error">❌ Failed to load property board. Check console for details.</div>';
+            }
+        }
+
+        function createPropertyColumn(property) {
+            const column = document.createElement('div');
+            column.className = 'property-column';
+            column.id = `property-${property.id}`;
+
+            // Property header
+            const header = document.createElement('div');
+            header.className = 'property-header';
+            header.innerHTML = `
+                <div class="property-name">${escapeHtml(property.name)}</div>
+                <div class="property-address">${escapeHtml(property.address)}</div>
+                <div class="property-details">
+                    Manager: ${escapeHtml(property.area_manager || 'N/A')} |
+                    ${property.plow ? 'Plow' : ''} ${property.plow && property.salt ? '&' : ''} ${property.salt ? 'Salt' : ''}
+                </div>
+            `;
+            column.appendChild(header);
+
+            // Contractors list
+            const contractorsContainer = document.createElement('div');
+            contractorsContainer.className = 'contractors-list';
+            contractorsContainer.id = `contractors-${property.id}`;
+
+            if (property.contractors && property.contractors.length > 0) {
+                property.contractors.forEach(contractor => {
+                    const card = createContractorCard(property.id, contractor);
+                    contractorsContainer.appendChild(card);
+                });
+            } else {
+                contractorsContainer.innerHTML = '<div class="no-contractors">No contractors assigned</div>';
+            }
+
+            column.appendChild(contractorsContainer);
+
+            // Add contractor section
+            const addSection = document.createElement('div');
+            addSection.className = 'add-contractor-section';
+            addSection.innerHTML = `
+                <select class="add-contractor-select" id="select-${property.id}">
+                    <option value="">-- Select Contractor --</option>
+                </select>
+                <button class="add-btn" onclick="assignContractor(${property.id})">+ Add Contractor</button>
+            `;
+            column.appendChild(addSection);
+
+            // Populate contractor dropdown (exclude already assigned)
+            populateContractorDropdown(property);
+
+            return column;
+        }
+
+        function createContractorCard(propertyId, contractor) {
+            const card = document.createElement('div');
+            card.className = `contractor-card ${contractor.is_primary ? 'primary' : ''}`;
+            card.id = `card-${propertyId}-${contractor.contractor_id}`;
+
+            card.innerHTML = `
+                <div class="contractor-name">
+                    ${escapeHtml(contractor.name)}
+                    ${contractor.is_primary ? '<span class="primary-badge">PRIMARY</span>' : ''}
+                </div>
+                <div class="contractor-role">[${escapeHtml(contractor.role)}]</div>
+                <div class="contractor-email">${escapeHtml(contractor.email)}</div>
+                ${!contractor.is_primary ? `<button class="set-primary-btn" onclick="setPrimaryContractor(${propertyId}, ${contractor.contractor_id})">Set as Primary</button>` : ''}
+                <button class="remove-btn" onclick="removeContractor(${propertyId}, ${contractor.contractor_id})">✕ Remove</button>
+            `;
+
+            return card;
+        }
+
+        function populateContractorDropdown(property) {
+            const select = document.getElementById(`select-${property.id}`);
+            if (!select) return;
+
+            // Get IDs of already assigned contractors
+            const assignedIds = property.contractors.map(c => c.contractor_id);
+
+            // Filter out already assigned contractors
+            const availableContractors = allContractors.filter(c => !assignedIds.includes(c.id));
+
+            // Clear existing options except the first one
+            select.innerHTML = '<option value="">-- Select Contractor --</option>';
+
+            // Add available contractors
+            availableContractors.forEach(contractor => {
+                const option = document.createElement('option');
+                option.value = contractor.id;
+                option.textContent = `${contractor.name} (${contractor.email})`;
+                select.appendChild(option);
+            });
+        }
+
+        async function assignContractor(propertyId) {
+            const select = document.getElementById(`select-${propertyId}`);
+            const contractorId = parseInt(select.value);
+
+            if (!contractorId) {
+                alert('Please select a contractor');
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/contractors/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        contractor_id: contractorId,
+                        is_primary: false
+                    })
+                });
+
+                if (response.ok) {
+                    // Reload the board
+                    await loadPropertyBoard();
+                } else {
+                    const error = await response.json();
+                    alert(`Failed to assign contractor: ${error.detail}`);
+                }
+            } catch (error) {
+                console.error('Error assigning contractor:', error);
+                alert('Failed to assign contractor. Check console for details.');
+            }
+        }
+
+        async function removeContractor(propertyId, contractorId) {
+            if (!confirm('Remove this contractor from the property?')) {
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/contractors/${contractorId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    // Reload the board
+                    await loadPropertyBoard();
+                } else {
+                    const error = await response.json();
+                    alert(`Failed to remove contractor: ${error.detail}`);
+                }
+            } catch (error) {
+                console.error('Error removing contractor:', error);
+                alert('Failed to remove contractor. Check console for details.');
+            }
+        }
+
+        async function setPrimaryContractor(propertyId, contractorId) {
+            const token = localStorage.getItem('token');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/properties/${propertyId}/contractors/${contractorId}/primary`, {
+                    method: 'PUT',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (response.ok) {
+                    // Reload the board
+                    await loadPropertyBoard();
+                } else {
+                    const error = await response.json();
+                    alert(`Failed to set primary contractor: ${error.detail}`);
+                }
+            } catch (error) {
+                console.error('Error setting primary contractor:', error);
+                alert('Failed to set primary contractor. Check console for details.');
+            }
+        }
+
+        function goBack() {
+            const role = currentUserRole;
+            if (role === 'Admin') {
+                window.location.href = '/static/AdminDashboard.html';
+            } else if (role === 'Manager') {
+                window.location.href = '/static/ManagerDashboard.html';
+            } else {
+                window.location.href = '/static/login.html';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>
