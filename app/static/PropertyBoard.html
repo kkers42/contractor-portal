@@ -297,16 +297,33 @@
 
         async function loadAllContractors() {
             const token = localStorage.getItem('token');
+
+            // Debug logging for mobile
+            console.log('[DEBUG] Token exists:', !!token);
+            if (token) {
+                console.log('[DEBUG] Token preview:', token.substring(0, 20) + '...' + token.substring(token.length - 20));
+                console.log('[DEBUG] Token length:', token.length);
+            } else {
+                console.log('[DEBUG] NO TOKEN FOUND');
+            }
+
             try {
-                console.log('Fetching contractors from:', `${API_BASE_URL}/contractors/`);
+                console.log('[DEBUG] Fetching contractors from:', `${API_BASE_URL}/contractors/`);
+                console.log('[DEBUG] Sending Authorization header:', token ? 'Bearer <token>' : 'NO AUTH HEADER');
+
                 const response = await fetch(`${API_BASE_URL}/contractors/`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
+
+                console.log('[DEBUG] Response status:', response.status);
+                console.log('[DEBUG] Response ok:', response.ok);
 
                 if (response.ok) {
                     allContractors = await response.json();
                     console.log('Loaded contractors:', allContractors);
                 } else {
+                    const responseText = await response.text();
+                    console.error('[DEBUG] Failed response body:', responseText);
                     console.error('Failed to load contractors, status:', response.status);
                     const errorMsg = response.status === 401
                         ? '❌ Authentication failed. Please <a href="/static/login.html" style="color: #80ff80;">log in again</a>.'
@@ -315,6 +332,7 @@
                         `<div class="message error">${errorMsg}</div>`;
                 }
             } catch (error) {
+                console.error('[DEBUG] Exception during fetch:', error);
                 console.error('Error loading contractors:', error);
                 document.getElementById('boardContainer').innerHTML =
                     `<div class="message error">❌ Cannot connect to server at ${API_BASE_URL}. Please ensure the server is running.</div>`;
@@ -325,13 +343,26 @@
             const token = localStorage.getItem('token');
             const container = document.getElementById('boardContainer');
 
+            // Debug logging for mobile
+            console.log('[DEBUG] loadPropertyBoard - Token exists:', !!token);
+            if (token) {
+                console.log('[DEBUG] loadPropertyBoard - Token preview:', token.substring(0, 20) + '...' + token.substring(token.length - 20));
+            }
+
             try {
-                console.log('Fetching property board from:', `${API_BASE_URL}/properties/board/`);
+                console.log('[DEBUG] Fetching property board from:', `${API_BASE_URL}/properties/board/`);
+                console.log('[DEBUG] Sending Authorization header:', token ? 'Bearer <token>' : 'NO AUTH HEADER');
+
                 const response = await fetch(`${API_BASE_URL}/properties/board/`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
+                console.log('[DEBUG] Property board response status:', response.status);
+                console.log('[DEBUG] Property board response ok:', response.ok);
+
                 if (!response.ok) {
+                    const responseText = await response.text();
+                    console.error('[DEBUG] Failed property board response body:', responseText);
                     console.error('Property board request failed, status:', response.status);
                     const errorMsg = response.status === 401
                         ? '❌ Authentication failed. Please <a href="/static/login.html" style="color: #80ff80;">log in again</a>.'
@@ -358,6 +389,7 @@
                 });
 
             } catch (error) {
+                console.error('[DEBUG] Exception loading property board:', error);
                 console.error('Error loading property board:', error);
                 container.innerHTML = `<div class="message error">❌ Cannot connect to server at ${API_BASE_URL}. Please ensure the server is running.</div>`;
             }
