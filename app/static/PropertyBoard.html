@@ -258,7 +258,8 @@
     </div>
 
     <script>
-        const API_BASE_URL = window.API_CONFIG?.BASE_URL || 'http://localhost:8000';
+        // Use API_BASE_URL from config.js (loaded globally)
+        const API_BASE_URL = window.API_BASE_URL || 'https://snow-contractor.com';
         let allContractors = [];
         let currentUserRole = null;
 
@@ -285,6 +286,10 @@
                     '<div class="message error">⚠️ Access Denied: Only Admins and Managers can access this page.</div>';
                 return;
             }
+
+            // Debug: Log API_BASE_URL and hostname
+            console.log('Current hostname:', window.location.hostname);
+            console.log('API_BASE_URL is set to:', window.API_BASE_URL || API_BASE_URL);
 
             await loadAllContractors();
             await loadPropertyBoard();
