@@ -293,17 +293,23 @@
         async function loadAllContractors() {
             const token = localStorage.getItem('token');
             try {
+                console.log('Fetching contractors from:', `${API_BASE_URL}/contractors/`);
                 const response = await fetch(`${API_BASE_URL}/contractors/`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 if (response.ok) {
                     allContractors = await response.json();
+                    console.log('Loaded contractors:', allContractors);
                 } else {
-                    console.error('Failed to load contractors');
+                    console.error('Failed to load contractors, status:', response.status);
+                    document.getElementById('boardContainer').innerHTML =
+                        `<div class="message error">❌ Failed to load contractors (HTTP ${response.status}). Check server status.</div>`;
                 }
             } catch (error) {
                 console.error('Error loading contractors:', error);
+                document.getElementById('boardContainer').innerHTML =
+                    `<div class="message error">❌ Cannot connect to server at ${API_BASE_URL}. Please ensure the server is running.</div>`;
             }
         }
 
@@ -312,15 +318,19 @@
             const container = document.getElementById('boardContainer');
 
             try {
+                console.log('Fetching property board from:', `${API_BASE_URL}/properties/board/`);
                 const response = await fetch(`${API_BASE_URL}/properties/board/`, {
                     headers: { 'Authorization': `Bearer ${token}` }
                 });
 
                 if (!response.ok) {
-                    throw new Error('Failed to load property board');
+                    console.error('Property board request failed, status:', response.status);
+                    container.innerHTML = `<div class="message error">❌ Failed to load property board (HTTP ${response.status})</div>`;
+                    return;
                 }
 
                 const properties = await response.json();
+                console.log('Loaded properties:', properties);
 
                 if (properties.length === 0) {
                     container.innerHTML = '<div class="message">No properties found. Add properties first.</div>';
@@ -338,7 +348,7 @@
 
             } catch (error) {
                 console.error('Error loading property board:', error);
-                container.innerHTML = '<div class="message error">❌ Failed to load property board. Check console for details.</div>';
+                container.innerHTML = `<div class="message error">❌ Cannot connect to server at ${API_BASE_URL}. Please ensure the server is running.</div>`;
             }
         }
 
