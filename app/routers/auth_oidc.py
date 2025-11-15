@@ -107,4 +107,4 @@ async def callback(request: Request, provider: str):
 
     touch_last_login(user_id)
     app_jwt = _issue_app_jwt(user_id=user_id, role=user_role)
-    return RedirectResponse(f"{settings.APP_BASE_URL}/login.html#token={app_jwt}", status_code=302)
+    return RedirectResponse(f"{settings.APP_BASE_URL}/static/login.html#token={app_jwt}", status_code=302)
