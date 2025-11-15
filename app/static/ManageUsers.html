@@ -73,6 +73,8 @@
 </head>
 <body onload="checkAccess(['Admin']); fetchUsers(); fetchContractors();">
 
+<a href="/static/AdminDashboard.html" style="display: inline-block; margin-bottom: 20px; padding: 10px 20px; background-color: #000; color: #80ff80; border: 1px solid #80ff80; text-decoration: none; border-radius: 4px;">← Back to Admin Dashboard</a>
+
 <h2>Manage Users</h2>
 
 <table id="usersTable">
@@ -80,9 +82,9 @@
         <tr>
             <th>ID</th>
             <th>Name</th>
-            <th>Phone</th>
             <th>Email</th>
             <th>Role</th>
+            <th>Status</th>
             <th>Contractor</th>
             <th>Actions</th>
         </tr>
@@ -131,18 +133,37 @@ async function fetchUsers() {
     tableBody.innerHTML = '';
     users.forEach(user => {
         const contractorName = user.contractor_name || 'N/A';
+        const statusBadge = user.status === 'active' ? '✓ Active' :
+                           user.status === 'suspended' ? '⊘ Suspended' :
+                           '⏳ Pending';
+        const statusColor = user.status === 'active' ? '#00cc00' :
+                           user.status === 'suspended' ? '#ff4444' :
+                           '#FFA500';
+
         const row = document.createElement('tr');
         row.innerHTML = `
             <td>${user.id}</td>
-            <td>${user.name}</td>
-            <td>${user.phone}</td>
+            <td>${user.name || user.display_name || 'N/A'}</td>
             <td>${user.email}</td>
-            <td>${user.role}</td>
+            <td>
+                <select onchange="changeUserRole(${user.id}, this.value)" style="background: #000; color: #80ff80; border: 1px solid #80ff80; padding: 4px;">
+                    <option value="Admin" ${user.role === 'Admin' ? 'selected' : ''}>Admin</option>
+                    <option value="Manager" ${user.role === 'Manager' ? 'selected' : ''}>Manager</option>
+                    <option value="Contractor" ${user.role === 'Contractor' ? 'selected' : ''}>Contractor</option>
+                    <option value="Subcontractor" ${user.role === 'Subcontractor' ? 'selected' : ''}>Subcontractor</option>
+                    <option value="User" ${user.role === 'User' ? 'selected' : ''}>User</option>
+                </select>
+            </td>
+            <td style="color: ${statusColor}; font-weight: bold;">${statusBadge}</td>
             <td>${contractorName}</td>
             <td>
-                <button onclick="editUser(${user.id}, '${user.name}', '${user.phone}', '${user.email}', '${user.role}', ${user.contractor_id || 'null'})">Edit</button>
+                ${user.status === 'active' ?
+                    `<button onclick="suspendUser(${user.id})" style="color: #ff4444; border-color: #ff4444;">Suspend</button>` :
+                    user.status === 'suspended' ?
+                    `<button onclick="reactivateUser(${user.id})" style="color: #00cc00; border-color: #00cc00;">Reactivate</button>` :
+                    ''
+                }
                 <button onclick="deleteUser(${user.id})">Delete</button>
-                <button onclick="resetPasswordInline('${user.email}')">Reset Password</button>
             </td>
         `;
         tableBody.appendChild(row);
@@ -279,6 +300,90 @@ async function resetPasswordInline(email) {
         alert("✅ Password reset!");
     } else {
         alert("❌ Failed to reset password.");
+    }
+}
+
+async function changeUserRole(userId, newRole) {
+    if (!confirm(`Change user role to ${newRole}?`)) {
+        fetchUsers(); // Reload to reset dropdown
+        return;
+    }
+
+    const token = localStorage.getItem('token');
+    const formData = new URLSearchParams();
+    formData.append('role', newRole);
+
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/change-user-role/${userId}`, {
+            method: 'POST',
+            headers: {
+                'Authorization': `Bearer ${token}`,
+                'Content-Type': 'application/x-www-form-urlencoded'
+            },
+            body: formData
+        });
+
+        const result = await response.json();
+
+        if (result.ok || response.ok) {
+            alert(`✅ User role changed to ${newRole}`);
+            fetchUsers();
+        } else {
+            alert(`❌ ${result.message || 'Failed to change role'}`);
+            fetchUsers();
+        }
+    } catch (error) {
+        console.error('Error changing role:', error);
+        alert('❌ Failed to change user role');
+        fetchUsers();
+    }
+}
+
+async function suspendUser(userId) {
+    if (!confirm('Are you sure you want to suspend this user?')) return;
+
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/suspend-user/${userId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+
+        if (result.ok) {
+            alert('✅ User suspended');
+            fetchUsers();
+        } else {
+            alert(`❌ ${result.message || 'Failed to suspend user'}`);
+        }
+    } catch (error) {
+        console.error('Error suspending user:', error);
+        alert('❌ Failed to suspend user');
+    }
+}
+
+async function reactivateUser(userId) {
+    if (!confirm('Reactivate this user?')) return;
+
+    const token = localStorage.getItem('token');
+    try {
+        const response = await fetch(`${API_BASE_URL}/admin/reactivate-user/${userId}`, {
+            method: 'POST',
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+
+        if (result.ok) {
+            alert('✅ User reactivated');
+            fetchUsers();
+        } else {
+            alert(`❌ ${result.message || 'Failed to reactivate user'}`);
+        }
+    } catch (error) {
+        console.error('Error reactivating user:', error);
+        alert('❌ Failed to reactivate user');
     }
 }
 

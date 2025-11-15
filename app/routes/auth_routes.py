@@ -228,6 +228,30 @@ def reactivate_user(user_id: int, current_user: dict = Depends(get_current_user)
     except Exception as e:
         return {"ok": False, "message": f"Failed to reactivate user: {str(e)}"}
 
+@router.post("/admin/change-user-role/{user_id}")
+def change_user_role(
+    user_id: int,
+    role: str = Form(...),
+    current_user: dict = Depends(get_current_user)
+):
+    """Change a user's role"""
+    if current_user["role"] != "Admin":
+        raise HTTPException(status_code=403, detail="Admins only!")
+
+    # Validate role
+    valid_roles = ["Admin", "Manager", "Contractor", "Subcontractor", "User"]
+    if role not in valid_roles:
+        return {"ok": False, "message": "Invalid role"}
+
+    try:
+        execute_query(
+            "UPDATE users SET role = %s, updated_at = NOW() WHERE id = %s",
+            (role, user_id)
+        )
+        return {"ok": True, "message": f"User role changed to {role}"}
+    except Exception as e:
+        return {"ok": False, "message": f"Failed to change role: {str(e)}"}
+
 class ChangePasswordRequest(BaseModel):
     current_password: str
     new_password: str
