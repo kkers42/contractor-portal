@@ -1167,26 +1167,44 @@ async def handle_call_tool(name: str, arguments: dict) -> list[TextContent]:
                     text="Error: HOSTINGER_API_KEY not found in environment variables."
                 )]
 
-            base_url = "https://api.hostinger.com/v1"
             headers = {
                 "Authorization": f"Bearer {api_key}",
                 "Content-Type": "application/json"
             }
 
-            try:
-                response = requests.get(f"{base_url}/domains", headers=headers, timeout=30)
-                response.raise_for_status()
-                domains_data = response.json()
+            # Try multiple possible endpoints
+            endpoints = [
+                "https://api.hostinger.com/domains",
+                "https://api.hostinger.com/v1/domains",
+                "https://rest-api.hostinger.com/v1/domains",
+                "https://api.hostinger.com/hosting/domains"
+            ]
 
-                return [TextContent(
-                    type="text",
-                    text=json.dumps(domains_data, indent=2)
-                )]
-            except Exception as e:
-                return [TextContent(
-                    type="text",
-                    text=f"Hostinger API error: {str(e)}"
-                )]
+            errors = []
+            for endpoint in endpoints:
+                try:
+                    response = requests.get(endpoint, headers=headers, timeout=10)
+                    if response.status_code == 200:
+                        domains_data = response.json()
+                        return [TextContent(
+                            type="text",
+                            text=f"Success with endpoint: {endpoint}\n\n{json.dumps(domains_data, indent=2)}"
+                        )]
+                    else:
+                        errors.append(f"{endpoint}: HTTP {response.status_code} - {response.text[:200]}")
+                except Exception as e:
+                    errors.append(f"{endpoint}: {str(e)}")
+
+            # If all failed, return detailed error info
+            error_text = "All Hostinger API endpoints failed:\n\n" + "\n\n".join(errors)
+            error_text += f"\n\nAPI Key (first 10 chars): {api_key[:10]}..."
+            error_text += "\n\nNote: Your Hostinger API key might be for VPS management only, not domain management."
+            error_text += "\nYou can still deploy using SSH commands without the Hostinger API."
+
+            return [TextContent(
+                type="text",
+                text=error_text
+            )]
 
         elif name == "hostinger_get_dns_records":
             import requests
