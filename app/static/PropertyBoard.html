@@ -306,6 +306,11 @@
                 if (response.ok) {
                     allContractors = await response.json();
                     console.log('Loaded contractors:', allContractors);
+                } else if (response.status === 401) {
+                    console.error('Unauthorized - redirecting to login');
+                    localStorage.removeItem('token');
+                    window.location.href = '/static/login.html';
+                    return;
                 } else {
                     console.error('Failed to load contractors, status:', response.status);
                     document.getElementById('boardContainer').innerHTML =
@@ -329,6 +334,12 @@
                 });
 
                 if (!response.ok) {
+                    if (response.status === 401) {
+                        console.error('Unauthorized - redirecting to login');
+                        localStorage.removeItem('token');
+                        window.location.href = '/static/login.html';
+                        return;
+                    }
                     console.error('Property board request failed, status:', response.status);
                     container.innerHTML = `<div class="message error">❌ Failed to load property board (HTTP ${response.status})</div>`;
                     return;
