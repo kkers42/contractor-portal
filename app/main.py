@@ -2,14 +2,17 @@ from fastapi import FastAPI
 from fastapi.middleware.cors import CORSMiddleware
 from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
+from starlette.middleware.sessions import SessionMiddleware
 from routers.auth_oidc import router as auth_router
 import os
 
 app = FastAPI()
 
-app.include_router(auth_router)
-
-app.mount("/static", StaticFiles(directory="static", html=True), name="static")
+# Add SessionMiddleware BEFORE other middleware (required for OAuth)
+app.add_middleware(
+    SessionMiddleware,
+    secret_key=os.getenv('APP_JWT_SECRET', 'change-me-in-production-please-use-a-long-random-string')
+)
 
 app.add_middleware(
     CORSMiddleware,
@@ -18,6 +21,10 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+app.include_router(auth_router)
+
+app.mount("/static", StaticFiles(directory="static", html=True), name="static")
 
 @app.get("/")
 def serve_home():
