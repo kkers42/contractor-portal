@@ -15,10 +15,10 @@ if (typeof window.CONFIG_LOADED === 'undefined') {
     hostname.startsWith("10.") ||
     /^172\.(1[6-9]|2[0-9]|3[0-1])\./.test(hostname);
 
-  // If on local network, use the current hostname:port, otherwise use cloud
+  // If on local network, use the current hostname:port, otherwise use production VPS
   const API_BASE_URL = isLocalhost
-  ? `http://${hostname}:8080`
-  : "https://contractor-portal-410182375480.us-central1.run.app";
+  ? `http://${hostname}:8000`
+  : "https://snow-contractor.com";
 
   window.API_BASE_URL = API_BASE_URL;
 
