@@ -1,0 +1,376 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Active Tickets - Contractor Portal</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <script src="/static/config.js"></script>
+    <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <link rel="stylesheet" href="/static/modern-theme.css">
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #80ff80;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+            margin: 0;
+        }
+
+        h1, h2 {
+            color: #80ff80;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 5px;
+        }
+
+        .header {
+            border: 1px solid #80ff80;
+            padding: 15px;
+            margin-bottom: 20px;
+            background-color: #000;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .header h1 {
+            margin: 0;
+            border: none;
+        }
+
+        .back-btn {
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            text-decoration: none;
+        }
+
+        .back-btn:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+
+        .property-card {
+            background-color: #000;
+            border: 1px solid #80ff80;
+            padding: 20px;
+            margin-bottom: 20px;
+            border-radius: 8px;
+        }
+
+        .property-card.primary {
+            border-color: #00cc00;
+            border-width: 2px;
+        }
+
+        .property-header {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 15px;
+        }
+
+        .property-name {
+            font-size: 18px;
+            font-weight: bold;
+            color: #00cc00;
+        }
+
+        .primary-badge {
+            background-color: #00cc00;
+            color: #000;
+            padding: 3px 8px;
+            font-size: 11px;
+            font-weight: bold;
+            border-radius: 3px;
+            margin-left: 10px;
+        }
+
+        .property-details {
+            font-size: 13px;
+            opacity: 0.8;
+            margin-bottom: 15px;
+        }
+
+        .ticket-status {
+            background-color: #111;
+            border: 1px solid #80ff80;
+            padding: 10px;
+            margin-bottom: 15px;
+            border-radius: 4px;
+        }
+
+        .ticket-status.active {
+            border-color: #FFA500;
+            background-color: #221100;
+        }
+
+        .status-label {
+            font-weight: bold;
+            margin-bottom: 5px;
+        }
+
+        .start-btn, .finish-btn {
+            background-color: #003300;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            padding: 10px 20px;
+            cursor: pointer;
+            font-family: 'Courier New', monospace;
+            font-weight: bold;
+            margin-right: 10px;
+        }
+
+        .start-btn:hover, .finish-btn:hover {
+            background-color: #005500;
+            border-color: #00cc00;
+        }
+
+        .finish-btn {
+            background-color: #330000;
+            color: #ff8080;
+            border-color: #ff8080;
+        }
+
+        .finish-btn:hover {
+            background-color: #550000;
+            border-color: #ff0000;
+        }
+
+        .message {
+            text-align: center;
+            padding: 50px;
+            font-size: 14px;
+        }
+
+        .loading {
+            color: #00cc00;
+        }
+
+        .error {
+            color: #ff8080;
+        }
+
+        .time-info {
+            font-size: 12px;
+            opacity: 0.7;
+            margin-top: 5px;
+        }
+    </style>
+</head>
+<body onload="initializePage()">
+    <div class="header">
+        <h1>🎫 My Active Tickets</h1>
+        <a href="#" class="back-btn" onclick="goBack(); return false;">← Back to Dashboard</a>
+    </div>
+
+    <div id="propertiesContainer">
+        <div class="message loading">Loading your assigned properties...</div>
+    </div>
+
+    <script>
+        const API_BASE_URL = window.API_BASE_URL || 'https://snow-contractor.com';
+        let currentUserRole = null;
+
+        async function initializePage() {
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/static/login.html';
+                return;
+            }
+
+            // Get user role from token
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                currentUserRole = payload.role;
+            } catch (e) {
+                console.error('Failed to decode token:', e);
+                window.location.href = '/static/login.html';
+                return;
+            }
+
+            await loadMyProperties();
+        }
+
+        async function loadMyProperties() {
+            const token = localStorage.getItem('token');
+            const container = document.getElementById('propertiesContainer');
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/my-properties/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    if (response.status === 401) {
+                        container.innerHTML = '<div class="message error">❌ Authentication failed. Please <a href="/static/login.html" style="color: #80ff80;">log in again</a>.</div>';
+                    } else {
+                        container.innerHTML = `<div class="message error">❌ Failed to load properties (HTTP ${response.status})</div>`;
+                    }
+                    return;
+                }
+
+                const properties = await response.json();
+
+                if (properties.length === 0) {
+                    container.innerHTML = '<div class="message">📋 No properties assigned to you yet. Contact your manager.</div>';
+                    return;
+                }
+
+                // Clear container
+                container.innerHTML = '';
+
+                // Create a card for each property
+                properties.forEach(property => {
+                    const card = createPropertyCard(property);
+                    container.appendChild(card);
+                });
+
+            } catch (error) {
+                console.error('Error loading properties:', error);
+                container.innerHTML = `<div class="message error">❌ Cannot connect to server. Please try again.</div>`;
+            }
+        }
+
+        function createPropertyCard(property) {
+            const card = document.createElement('div');
+            card.className = `property-card ${property.is_primary ? 'primary' : ''}`;
+
+            const hasActiveTicket = property.has_active_ticket > 0;
+            const statusHtml = hasActiveTicket
+                ? `<div class="ticket-status active">
+                       <div class="status-label">⏰ Active Ticket</div>
+                       <div class="time-info">Started today - click "Finish Ticket" to complete</div>
+                   </div>`
+                : `<div class="ticket-status">
+                       <div class="status-label">✓ Ready</div>
+                       <div class="time-info">No active ticket - click "Start Ticket" when you begin work</div>
+                   </div>`;
+
+            const actionsHtml = hasActiveTicket
+                ? `<button class="finish-btn" onclick="finishTicket(${property.id}, '${escapeHtml(property.name)}')">⏹ Finish Ticket</button>`
+                : `<button class="start-btn" onclick="startTicket(${property.id}, '${escapeHtml(property.name)}')">▶ Start Ticket</button>`;
+
+            card.innerHTML = `
+                <div class="property-header">
+                    <div>
+                        <span class="property-name">${escapeHtml(property.name)}</span>
+                        ${property.is_primary ? '<span class="primary-badge">PRIMARY</span>' : ''}
+                    </div>
+                </div>
+                <div class="property-details">
+                    📍 ${escapeHtml(property.address)}<br>
+                    📏 ${property.sqft.toLocaleString()} sq ft<br>
+                    👤 Manager: ${escapeHtml(property.area_manager || 'N/A')}<br>
+                    🚜 Services: ${property.plow ? 'Plow' : ''} ${property.plow && property.salt ? '&' : ''} ${property.salt ? 'Salt' : ''}
+                </div>
+                ${statusHtml}
+                ${actionsHtml}
+            `;
+
+            return card;
+        }
+
+        async function startTicket(propertyId, propertyName) {
+            if (!confirm(`Start a new ticket for ${propertyName}?`)) {
+                return;
+            }
+
+            const token = localStorage.getItem('token');
+            const now = new Date();
+            const timeIn = now.toISOString().slice(0, 16); // Format: "2025-01-15T10:30"
+
+            const logData = {
+                property_id: propertyId,
+                time_in: timeIn,
+                time_out: null,
+                contractor_name: '',
+                worker_name: '',
+                equipment: '',
+                bulk_salt_qty: 0,
+                bag_salt_qty: 0,
+                calcium_chloride_qty: 0,
+                customer_provided: false,
+                notes: `Ticket started at ${now.toLocaleTimeString()}`
+            };
+
+            try {
+                const response = await fetch(`${API_BASE_URL}/winter-logs/`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}`
+                    },
+                    body: JSON.stringify(logData)
+                });
+
+                if (response.ok) {
+                    alert(`✅ Ticket started for ${propertyName}! Time in: ${now.toLocaleTimeString()}`);
+                    await loadMyProperties();
+                } else {
+                    const error = await response.json();
+                    alert(`❌ Failed to start ticket: ${error.detail}`);
+                }
+            } catch (error) {
+                console.error('Error starting ticket:', error);
+                alert('❌ Failed to start ticket. Please try again.');
+            }
+        }
+
+        async function finishTicket(propertyId, propertyName) {
+            const token = localStorage.getItem('token');
+
+            // Get the active ticket for this property
+            try {
+                const response = await fetch(`${API_BASE_URL}/winter-logs/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    alert('❌ Failed to load ticket data');
+                    return;
+                }
+
+                const logs = await response.json();
+                const activeTicket = logs.find(log =>
+                    log.property_id === propertyId &&
+                    !log.time_out &&
+                    new Date(log.time_in).toDateString() === new Date().toDateString()
+                );
+
+                if (!activeTicket) {
+                    alert('❌ No active ticket found for this property');
+                    return;
+                }
+
+                // Redirect to WinterOpsLog page with pre-filled data
+                window.location.href = `/static/WinterOpsLog.html?edit=${activeTicket.id}`;
+
+            } catch (error) {
+                console.error('Error finishing ticket:', error);
+                alert('❌ Failed to finish ticket. Please try again.');
+            }
+        }
+
+        function goBack() {
+            const role = currentUserRole;
+            if (role === 'Admin') {
+                window.location.href = '/static/AdminDashboard.html';
+            } else if (role === 'Manager') {
+                window.location.href = '/static/ManagerDashboard.html';
+            } else {
+                window.location.href = '/static/UserDashboard.html';
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+    </script>
+</body>
+</html>

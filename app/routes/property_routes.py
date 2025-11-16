@@ -391,3 +391,29 @@ def set_primary_contractor(
     except Exception as e:
         print(f"[ERROR] Failed to set primary contractor: {str(e)}")
         raise HTTPException(status_code=500, detail=f"Failed to set primary contractor: {str(e)}")
+
+@router.get("/my-properties/")
+def get_my_assigned_properties(current_user: dict = Depends(get_current_user)):
+    """Get all properties assigned to the current user"""
+    user_id = int(current_user["sub"])
+
+    query = """
+        SELECT
+            l.id, l.name, l.address, l.sqft, l.area_manager, l.plow, l.salt,
+            pc.is_primary,
+            (SELECT COUNT(*) FROM winter_ops_logs w
+             WHERE w.property_id = l.id
+             AND w.time_out IS NULL
+             AND DATE(w.time_in) = CURDATE()) as has_active_ticket
+        FROM locations l
+        INNER JOIN property_contractors pc ON l.id = pc.property_id
+        WHERE pc.contractor_id = %s
+        ORDER BY pc.is_primary DESC, l.name ASC
+    """
+
+    try:
+        properties = fetch_query(query, (user_id,))
+        return properties if properties else []
+    except Exception as e:
+        print(f"[ERROR] Failed to get user's properties: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Failed to get properties: {str(e)}")

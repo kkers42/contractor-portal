@@ -106,10 +106,21 @@
     </div>
 
     <script>
+        let editingLogId = null;
+
         document.addEventListener('DOMContentLoaded', () => {
+            // Check if we're editing an existing ticket
+            const urlParams = new URLSearchParams(window.location.search);
+            editingLogId = urlParams.get('edit');
+
             fetchProperties();
             fetchContractors();
             fetchEquipment();
+
+            if (editingLogId) {
+                // Load the existing log data after dropdowns are populated
+                setTimeout(() => loadExistingLog(editingLogId), 500);
+            }
         });
 
         async function fetchProperties() {
@@ -194,6 +205,65 @@
             }
         }
 
+        async function loadExistingLog(logId) {
+            const token = localStorage.getItem('token');
+            try {
+                const response = await fetch(`${API_BASE_URL}/winter-logs/`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+
+                if (!response.ok) {
+                    throw new Error('Failed to load winter logs');
+                }
+
+                const logs = await response.json();
+                const log = logs.find(l => l.id === parseInt(logId));
+
+                if (!log) {
+                    alert('Ticket not found');
+                    return;
+                }
+
+                // Pre-fill all form fields
+                document.getElementById('property').value = log.property_id;
+                document.getElementById('contractor').value = log.contractor_id;
+                document.getElementById('worker').value = log.worker_name || '';
+                document.getElementById('service').value = log.equipment || '';
+                document.getElementById('time_in').value = formatDateTimeLocal(new Date(log.time_in));
+
+                // Only pre-fill time_out if it exists, otherwise leave it for the user to fill
+                if (log.time_out) {
+                    document.getElementById('time_out').value = formatDateTimeLocal(new Date(log.time_out));
+                } else {
+                    // Set default time_out to current time
+                    document.getElementById('time_out').value = formatDateTimeLocal(new Date());
+                }
+
+                document.getElementById('bulk_salt_qty').value = log.bulk_salt_qty || 0;
+                document.getElementById('bag_salt_qty').value = log.bag_salt_qty || 0;
+                document.getElementById('calcium_chloride_qty').value = log.calcium_chloride_qty || 0;
+                document.getElementById('customer_provided').value = log.customer_provided ? 'true' : 'false';
+                document.getElementById('notes').value = log.notes || '';
+
+                // Update page title
+                document.querySelector('h2').textContent = 'Finish Ticket';
+                document.querySelector('button').textContent = 'Update & Complete Ticket';
+
+            } catch (error) {
+                console.error('Error loading existing log:', error);
+                alert('Failed to load ticket data');
+            }
+        }
+
+        function formatDateTimeLocal(date) {
+            const year = date.getFullYear();
+            const month = String(date.getMonth() + 1).padStart(2, '0');
+            const day = String(date.getDate()).padStart(2, '0');
+            const hours = String(date.getHours()).padStart(2, '0');
+            const minutes = String(date.getMinutes()).padStart(2, '0');
+            return `${year}-${month}-${day}T${hours}:${minutes}`;
+        }
+
         async function submitWinterOpsLog() {
             const token = localStorage.getItem('token');
             const contractorSelect = document.getElementById('contractor');
@@ -215,20 +285,40 @@
             };
 
             try {
-                const response = await fetch(`${API_BASE_URL}/submit-winter-log/`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${token}`
-                    },
-                    body: JSON.stringify(data)
-                });
+                let response;
+                if (editingLogId) {
+                    // Update existing log
+                    response = await fetch(`${API_BASE_URL}/winter-logs/${editingLogId}`, {
+                        method: 'PUT',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(data)
+                    });
+                } else {
+                    // Create new log
+                    response = await fetch(`${API_BASE_URL}/submit-winter-log/`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${token}`
+                        },
+                        body: JSON.stringify(data)
+                    });
+                }
 
                 if (!response.ok) throw new Error(`Server error: ${response.status}`);
 
                 const result = await response.json();
-                alert(result.message || 'Winter Ops Log submitted!');
-                window.location.reload();
+                alert(result.message || (editingLogId ? 'Ticket completed successfully!' : 'Winter Ops Log submitted!'));
+
+                // Redirect back to MyTickets page after update
+                if (editingLogId) {
+                    window.location.href = '/static/MyTickets.html';
+                } else {
+                    window.location.reload();
+                }
             } catch (error) {
                 console.error('Error submitting log:', error);
                 alert('Failed to submit log. Check console.');

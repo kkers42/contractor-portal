@@ -118,8 +118,8 @@ sudo nano /etc/systemd/system/contractor-portal.service
 
 Add these environment variables:
 ```ini
-Environment="GOOGLE_CLIENT_ID=your-client-id-here.apps.googleusercontent.com"
-Environment="GOOGLE_CLIENT_SECRET=your-client-secret-here"
+Environment="GOOGLE_CLIENT_ID=410182375480-j0fblvtts5j97qrm2eor6suck2d4cu4m.apps.googleusercontent.com"
+Environment="GOOGLE_CLIENT_SECRET=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"
 Environment="GOOGLE_REDIRECT_URI=https://snow-contractor.com/auth/google/callback"
 ```
 
