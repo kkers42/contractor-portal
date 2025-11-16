@@ -292,6 +292,7 @@
             console.log('API_BASE_URL is set to:', window.API_BASE_URL || API_BASE_URL);
 
             await loadAllContractors();
+            console.log('[DEBUG] After loadAllContractors, allContractors has', allContractors.length, 'users');
             await loadPropertyBoard();
         }
 
@@ -386,6 +387,8 @@
                 properties.forEach(property => {
                     const column = createPropertyColumn(property);
                     container.appendChild(column);
+                    // Populate dropdown AFTER column is added to DOM
+                    populateContractorDropdown(property);
                 });
 
             } catch (error) {
@@ -440,9 +443,7 @@
             `;
             column.appendChild(addSection);
 
-            // Populate contractor dropdown (exclude already assigned)
-            populateContractorDropdown(property);
-
+            // Note: Dropdown will be populated after column is added to DOM
             return column;
         }
 
@@ -526,7 +527,8 @@
                 });
 
                 if (response.ok) {
-                    // Reload the board
+                    // Reload contractors and board
+                    await loadAllContractors();
                     await loadPropertyBoard();
                 } else {
                     const error = await response.json();
@@ -552,7 +554,8 @@
                 });
 
                 if (response.ok) {
-                    // Reload the board
+                    // Reload contractors and board
+                    await loadAllContractors();
                     await loadPropertyBoard();
                 } else {
                     const error = await response.json();
@@ -574,7 +577,8 @@
                 });
 
                 if (response.ok) {
-                    // Reload the board
+                    // Reload contractors and board
+                    await loadAllContractors();
                     await loadPropertyBoard();
                 } else {
                     const error = await response.json();
