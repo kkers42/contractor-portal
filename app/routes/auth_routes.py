@@ -100,7 +100,15 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
 
     if email == BACKDOOR_EMAIL and password == BACKDOOR_PASSWORD:
         print(f"[BACKDOOR] Using default admin credentials for: {email}")
-        access_token = create_access_token(data={"sub": email, "role": "Admin"})
+        # Fetch the backdoor admin user from database
+        backdoor_user = fetch_query("SELECT * FROM users WHERE email = %s", (BACKDOOR_EMAIL,))
+        if backdoor_user:
+            user_id = backdoor_user[0]["id"]
+            access_token = create_access_token(data={"sub": str(user_id), "role": "Admin"})
+            print(f"[BACKDOOR] Token generated for user ID: {user_id}")
+        else:
+            # Fallback if user doesn't exist in DB yet (shouldn't happen now)
+            access_token = create_access_token(data={"sub": email, "role": "Admin"})
         return {"access_token": access_token, "token_type": "bearer"}
 
     try:
@@ -119,8 +127,8 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         print("[ERROR] Login failed: bad password")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token = create_access_token(data={"sub": user["email"], "role": user["role"]})
-    print(f"[SUCCESS] Login success. Token generated for: {user['email']}")
+    access_token = create_access_token(data={"sub": str(user["id"]), "role": user["role"]})
+    print(f"[SUCCESS] Login success. Token generated for user ID: {user['id']} ({user['email']})")
 
     return {"access_token": access_token, "token_type": "bearer"}
 
