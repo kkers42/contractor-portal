@@ -322,9 +322,7 @@ def assign_contractor_to_property(
     if not contractor_check:
         raise HTTPException(status_code=404, detail="Contractor not found or inactive")
 
-    # Check if contractor has appropriate role
-    if contractor_check[0]['role'] not in ['Contractor', 'Manager', 'Subcontractor']:
-        raise HTTPException(status_code=400, detail="User must be a Contractor, Manager, or Subcontractor")
+    # Allow any active user to be assigned (in a snowstorm, anyone can plow)
 
     # Check if assignment already exists
     existing = fetch_query(
