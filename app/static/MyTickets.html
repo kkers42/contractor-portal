@@ -283,13 +283,19 @@
             const now = new Date();
             const timeIn = now.toISOString().slice(0, 16); // Format: "2025-01-15T10:30"
 
+            // Get current user info from token
+            const payload = JSON.parse(atob(token.split('.')[1]));
+            const userId = parseInt(payload.sub);
+            const userName = payload.name || 'Unknown';
+
             const logData = {
                 property_id: propertyId,
+                contractor_id: userId,
+                contractor_name: userName,
+                worker_name: userName,
+                equipment: 'To be filled',
                 time_in: timeIn,
-                time_out: null,
-                contractor_name: '',
-                worker_name: '',
-                equipment: '',
+                time_out: timeIn, // Set same as time_in initially, will be updated when finishing
                 bulk_salt_qty: 0,
                 bag_salt_qty: 0,
                 calcium_chloride_qty: 0,
@@ -298,7 +304,7 @@
             };
 
             try {
-                const response = await fetch(`${API_BASE_URL}/winter-logs/`, {
+                const response = await fetch(`${API_BASE_URL}/submit-winter-log/`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -312,7 +318,7 @@
                     await loadMyProperties();
                 } else {
                     const error = await response.json();
-                    alert(`❌ Failed to start ticket: ${error.detail}`);
+                    alert(`❌ Failed to start ticket: ${error.detail || JSON.stringify(error)}`);
                 }
             } catch (error) {
                 console.error('Error starting ticket:', error);
