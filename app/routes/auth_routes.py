@@ -32,11 +32,11 @@ def get_users(current_user: dict = Depends(get_current_user)):
 
 @router.get("/contractors/")
 def get_contractors():
-    """Get all contractors (users with role='Contractor' or 'Manager')"""
+    """Get all active users (anyone can be assigned to plow in a snowstorm)"""
     query = """
-        SELECT id, name, phone, email
+        SELECT id, name, phone, email, role
         FROM users
-        WHERE role IN ('Contractor', 'Manager') AND status = 'active'
+        WHERE status = 'active'
         ORDER BY name
     """
     contractors = fetch_query(query)

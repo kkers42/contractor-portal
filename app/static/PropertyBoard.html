@@ -478,11 +478,11 @@
             // Clear existing options except the first one
             select.innerHTML = '<option value="">-- Select Contractor --</option>';
 
-            // Add available contractors
+            // Add available contractors with their roles
             availableContractors.forEach(contractor => {
                 const option = document.createElement('option');
                 option.value = contractor.id;
-                option.textContent = `${contractor.name} (${contractor.email})`;
+                option.textContent = `${contractor.name} - [${contractor.role}] (${contractor.email})`;
                 select.appendChild(option);
             });
         }
