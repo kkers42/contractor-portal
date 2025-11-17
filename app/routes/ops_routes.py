@@ -13,7 +13,7 @@ class WinterOpsLog(BaseModel):
     worker_name: str  # The subcontractor/worker (Last, First)
     equipment: str
     time_in: str
-    time_out: str
+    time_out: str | None = None  # Optional - None when ticket is started, filled when finished
     bulk_salt_qty: float
     bag_salt_qty: float
     calcium_chloride_qty: float
