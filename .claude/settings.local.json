@@ -29,7 +29,11 @@
       "Bash(nslookup:*)",
       "Bash(for file in AdminDashboard.html Home.html PropertyInfo.html WinterOpsLog.html EquipmentUsageReport.html ManageUsers.html Reports.html ViewWinterLogs.html ViewGreenLogs.html GreenOpsLog.html ManageEquipmentRates.html ManageWinterProducts.html ManageLandscapeProducts.html signup.html pending-approval.html ApprovePendingUsers.html)",
       "Bash(for file in login.html AdminDashboard.html Home.html PropertyInfo.html WinterOpsLog.html EquipmentUsageReport.html ManageUsers.html Reports.html ManageEquipmentRates.html ManageWinterProducts.html ManageLandscapeProducts.html signup.html ApprovePendingUsers.html ManagerDashboard.html UserDashboard.html PropertyBoard.html)",
-      "Bash(do scp \"$file\" root@72.61.0.186:/opt/contractor-portal/app/static/\"$file\")"
+      "Bash(do scp \"$file\" root@72.61.0.186:/opt/contractor-portal/app/static/\"$file\")",
+      "Bash(find:*)",
+      "Bash(for:*)",
+      "Bash(do)",
+      "Bash(python create_system_map.py:*)"
     ],
     "deny": [],
     "ask": []

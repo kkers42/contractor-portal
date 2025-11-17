@@ -212,7 +212,7 @@
     let serviceTypes = new Set();
 
     async function initializePage() {
-      checkAccess(['Admin', 'Manager', 'Subcontractor']);
+      checkAccess(['Admin', 'Manager', 'Subcontractor', 'User']);
       await Promise.all([fetchProperties(), fetchLogs()]);
       populateFilters();
     }

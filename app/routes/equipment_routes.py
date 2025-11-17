@@ -16,8 +16,8 @@ def get_equipment_rates(current_user: dict = Depends(get_current_user)):
     query = "SELECT id, equipment_name, hourly_rate, description FROM equipment_rates ORDER BY equipment_name"
     rates = fetch_query(query)
     
-    # Hide pricing information for Subcontractors
-    if rates and current_user["role"] == "Subcontractor":
+    # Hide pricing information for Subcontractors and Users
+    if rates and current_user["role"] in ["Subcontractor", "User"]:
         for rate in rates:
             rate["hourly_rate"] = None
     

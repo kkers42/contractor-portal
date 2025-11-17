@@ -341,14 +341,15 @@
                 }
 
                 const logs = await response.json();
+
+                // Find any active ticket (time_out is null) for this property
                 const activeTicket = logs.find(log =>
                     log.property_id === propertyId &&
-                    !log.time_out &&
-                    new Date(log.time_in).toDateString() === new Date().toDateString()
+                    !log.time_out
                 );
 
                 if (!activeTicket) {
-                    alert('❌ No active ticket found for this property');
+                    alert('❌ No active ticket found for this property.');
                     return;
                 }
 
