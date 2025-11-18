@@ -37,7 +37,8 @@ from routes import (
     ops_routes,
     report_routes,
     misc_routes,
-    equipment_routes
+    equipment_routes,
+    ai_routes
 )
 
 app.include_router(auth_routes.router)
@@ -47,6 +48,7 @@ app.include_router(ops_routes.router)
 app.include_router(report_routes.router)
 app.include_router(misc_routes.router)
 app.include_router(equipment_routes.router)
+app.include_router(ai_routes.router)
 
 if __name__ == "__main__":
     import uvicorn
