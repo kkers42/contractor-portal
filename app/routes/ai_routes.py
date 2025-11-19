@@ -22,9 +22,13 @@ class ChatResponse(BaseModel):
 
 def get_user_context(current_user: dict) -> str:
     """Get relevant context about the current user"""
-    user_id = current_user["id"]
+    # JWT payload has "sub" (user ID as string) and "role"
+    user_id = int(current_user["sub"])
     user_role = current_user["role"]
-    user_name = current_user["name"]
+
+    # Get user's name from database
+    user_info = fetch_query("SELECT name FROM users WHERE id = %s", (user_id,))
+    user_name = user_info[0]["name"] if user_info else "User"
 
     # Get user's assigned properties
     properties = fetch_query(
