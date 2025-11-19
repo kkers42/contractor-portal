@@ -56,8 +56,8 @@ class AIChatWidget {
                 position: fixed;
                 bottom: 90px;
                 right: 20px;
-                width: 380px;
-                height: 500px;
+                width: 600px;
+                height: 700px;
                 background: #1a1a1a;
                 border: 2px solid #667eea;
                 border-radius: 12px;
@@ -145,6 +145,10 @@ class AIChatWidget {
                 gap: 5px;
             }
 
+            .ai-suggestions.hidden {
+                display: none;
+            }
+
             .ai-suggestion-btn {
                 background: #1a1a2e;
                 color: #667eea;
@@ -210,7 +214,7 @@ class AIChatWidget {
             @media (max-width: 768px) {
                 .ai-chat-window {
                     width: calc(100vw - 40px);
-                    height: 400px;
+                    height: 500px;
                     right: 20px;
                 }
             }
@@ -306,6 +310,12 @@ class AIChatWidget {
         const message = input.value.trim();
 
         if (!message) return;
+
+        // Hide suggestions after first question
+        const suggestionsDiv = this.window.querySelector('#ai-suggestions');
+        if (suggestionsDiv) {
+            suggestionsDiv.classList.add('hidden');
+        }
 
         // Add user message
         this.addMessage('user', message);
