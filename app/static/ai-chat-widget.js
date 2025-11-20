@@ -56,8 +56,8 @@ class AIChatWidget {
                 position: fixed;
                 bottom: 90px;
                 right: 20px;
-                width: 500px;
-                height: 600px;
+                width: 450px;
+                height: 550px;
                 background: #1a1a1a;
                 border: 2px solid #667eea;
                 border-radius: 12px;

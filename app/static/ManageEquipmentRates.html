@@ -129,7 +129,10 @@
 <script>
 async function fetchEquipmentRates() {
     try {
-        const response = await fetch(`${API_BASE_URL}/equipment-rates/`);
+        const token = localStorage.getItem('token');
+        const response = await fetch(`${API_BASE_URL}/equipment-rates/`, {
+            headers: { 'Authorization': `Bearer ${token}` }
+        });
         if (!response.ok) throw new Error(`Failed to fetch: ${response.status}`);
 
         const equipment = await response.json();
