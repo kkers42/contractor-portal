@@ -8,7 +8,7 @@ router = APIRouter()
 class EquipmentRate(BaseModel):
     equipment_name: str
     hourly_rate: float
-    description: str = None
+    description: str | None = None
 
 @router.get("/equipment-rates/")
 def get_equipment_rates(current_user: dict = Depends(get_current_user)):
