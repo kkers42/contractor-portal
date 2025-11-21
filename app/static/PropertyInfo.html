@@ -187,6 +187,37 @@
         </div>
 
         <div class="form-group">
+          <label>Snow Trigger Type:</label>
+          <select id="propertyTriggerType">
+            <option value="zero_tolerance">Zero Tolerance (0")</option>
+            <option value="half_inch">0.5" Trigger</option>
+            <option value="one_inch">1" Trigger</option>
+            <option value="two_inch" selected>2" Trigger</option>
+            <option value="custom">Custom Amount</option>
+          </select>
+        </div>
+
+        <div class="form-group" id="customTriggerGroup" style="display:none;">
+          <label>Custom Trigger Amount (inches):</label>
+          <input type="number" id="propertyTriggerAmount" step="0.25" min="0" max="12" value="2.0">
+        </div>
+
+        <div class="form-group">
+          <label>Contract Tier:</label>
+          <select id="propertyContractTier">
+            <option value="Premium">Premium</option>
+            <option value="Standard" selected>Standard</option>
+            <option value="Basic">Basic</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Must Be Open By (Time):</label>
+          <input type="time" id="propertyOpenByTime" placeholder="e.g., 06:00">
+          <small style="opacity: 0.7;">Leave blank if no specific time requirement</small>
+        </div>
+
+        <div class="form-group">
           <button type="submit" class="btn">Save Property</button>
           <button type="button" class="btn" onclick="closeModal()">Cancel</button>
         </div>
@@ -272,13 +303,27 @@
       e.preventDefault();
 
       const propertyId = document.getElementById('propertyId').value;
+      const triggerType = document.getElementById('propertyTriggerType').value;
+      let triggerAmount = 2.0; // default
+
+      // Calculate trigger amount based on type
+      if (triggerType === 'zero_tolerance') triggerAmount = 0.0;
+      else if (triggerType === 'half_inch') triggerAmount = 0.5;
+      else if (triggerType === 'one_inch') triggerAmount = 1.0;
+      else if (triggerType === 'two_inch') triggerAmount = 2.0;
+      else if (triggerType === 'custom') triggerAmount = parseFloat(document.getElementById('propertyTriggerAmount').value);
+
       const propertyData = {
         name: document.getElementById('propertyName').value,
         address: document.getElementById('propertyAddress').value,
         sqft: parseInt(document.getElementById('propertySqft').value),
         area_manager: document.getElementById('propertyManager').value,
         plow: document.getElementById('propertyPlow').checked,
-        salt: document.getElementById('propertySalt').checked
+        salt: document.getElementById('propertySalt').checked,
+        trigger_type: triggerType,
+        trigger_amount: triggerAmount,
+        contract_tier: document.getElementById('propertyContractTier').value,
+        open_by_time: document.getElementById('propertyOpenByTime').value || null
       };
 
       const token = localStorage.getItem("token");
@@ -385,6 +430,16 @@
       // Reset file input
       event.target.value = '';
     }
+
+    // Show/hide custom trigger amount field
+    document.getElementById('propertyTriggerType').addEventListener('change', function() {
+      const customGroup = document.getElementById('customTriggerGroup');
+      if (this.value === 'custom') {
+        customGroup.style.display = 'block';
+      } else {
+        customGroup.style.display = 'none';
+      }
+    });
   </script>
     <script src="/static/ai-chat-widget.js"></script>
 </body>

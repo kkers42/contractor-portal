@@ -15,6 +15,10 @@ class PropertyData(BaseModel):
     area_manager: str
     plow: bool
     salt: bool
+    trigger_type: str | None = "two_inch"
+    trigger_amount: float | None = 2.0
+    contract_tier: str | None = "Standard"
+    open_by_time: str | None = None
 
 class PropertyUpdate(PropertyData):
     id: int
@@ -32,8 +36,8 @@ def add_property(property_data: PropertyData):
         )
 
     query = """
-        INSERT INTO locations (name, address, sqft, area_manager, plow, salt)
-        VALUES (%s, %s, %s, %s, %s, %s)
+        INSERT INTO locations (name, address, sqft, area_manager, plow, salt, trigger_type, trigger_amount, contract_tier, open_by_time)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     params = (
         property_data.name,
@@ -41,7 +45,11 @@ def add_property(property_data: PropertyData):
         property_data.sqft,
         property_data.area_manager,
         property_data.plow,
-        property_data.salt
+        property_data.salt,
+        property_data.trigger_type,
+        property_data.trigger_amount,
+        property_data.contract_tier,
+        property_data.open_by_time
     )
     try:
         execute_query(query, params)
@@ -60,7 +68,8 @@ def get_properties():
 def update_property(property_data: PropertyUpdate):
     query = """
         UPDATE locations
-        SET name = %s, address = %s, sqft = %s, area_manager = %s, plow = %s, salt = %s
+        SET name = %s, address = %s, sqft = %s, area_manager = %s, plow = %s, salt = %s,
+            trigger_type = %s, trigger_amount = %s, contract_tier = %s, open_by_time = %s
         WHERE id = %s
     """
     params = (
@@ -70,6 +79,10 @@ def update_property(property_data: PropertyUpdate):
         property_data.area_manager,
         property_data.plow,
         property_data.salt,
+        property_data.trigger_type,
+        property_data.trigger_amount,
+        property_data.contract_tier,
+        property_data.open_by_time,
         property_data.id
     )
     try:
