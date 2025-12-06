@@ -96,9 +96,11 @@
 </head>
 <body onload="checkAccess(['Admin', 'Manager']); fetchEquipmentRates();">
 
-<a href="/static/AdminDashboard.html" class="back-link">← Back to Dashboard</a>
-
 <h2>Manage Equipment Rates</h2>
+
+<div style="margin: 20px 0;">
+  <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+</div>
 
 <table id="equipmentTable">
     <thead>
@@ -270,5 +272,6 @@ function checkAccess(allowedRoles) {
 }
 </script>
 
+  <script src="/static/ai-chat-widget.js"></script>
 </body>
 </html>

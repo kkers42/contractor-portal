@@ -38,7 +38,15 @@ from routes import (
     report_routes,
     misc_routes,
     equipment_routes,
-    ai_routes
+    ai_routes,
+    property_list_routes,
+    route_routes,
+    weather_routes,
+    settings_routes,
+    tenant_routes,
+    winter_event_routes,
+    assignment_routes,
+    sms_routes
 )
 
 app.include_router(auth_routes.router)
@@ -49,6 +57,14 @@ app.include_router(report_routes.router)
 app.include_router(misc_routes.router)
 app.include_router(equipment_routes.router)
 app.include_router(ai_routes.router)
+app.include_router(property_list_routes.router)
+app.include_router(route_routes.router)
+app.include_router(weather_routes.router)
+app.include_router(settings_routes.router)
+app.include_router(tenant_routes.router)
+app.include_router(winter_event_routes.router)
+app.include_router(assignment_routes.router)
+app.include_router(sms_routes.router)
 
 if __name__ == "__main__":
     import uvicorn

@@ -108,6 +108,62 @@
             border-width: 2px;
         }
 
+        /* Acceptance Status Glow Effects */
+        .contractor-card.acceptance-pending {
+            border-color: #ffcc00;
+            box-shadow: 0 0 15px rgba(255, 204, 0, 0.5);
+            animation: yellowGlow 2s ease-in-out infinite;
+        }
+
+        .contractor-card.acceptance-accepted {
+            border-color: #00ff00;
+            box-shadow: 0 0 15px rgba(0, 255, 0, 0.6);
+        }
+
+        .contractor-card.acceptance-declined {
+            border-color: #888;
+            opacity: 0.7;
+        }
+
+        @keyframes yellowGlow {
+            0%, 100% { box-shadow: 0 0 10px rgba(255, 204, 0, 0.4); }
+            50% { box-shadow: 0 0 20px rgba(255, 204, 0, 0.8); }
+        }
+
+        .acceptance-badge {
+            display: inline-block;
+            padding: 2px 8px;
+            font-size: 9px;
+            font-weight: bold;
+            margin-left: 8px;
+            border-radius: 3px;
+        }
+
+        .acceptance-badge.pending {
+            background-color: #4a4000;
+            color: #ffcc00;
+            border: 1px solid #ffcc00;
+        }
+
+        .acceptance-badge.accepted {
+            background-color: #003300;
+            color: #00ff00;
+            border: 1px solid #00ff00;
+        }
+
+        .acceptance-badge.declined {
+            background-color: #330000;
+            color: #ff8080;
+            border: 1px solid #ff8080;
+        }
+
+        .acceptance-info {
+            font-size: 9px;
+            opacity: 0.6;
+            margin-top: 5px;
+            font-style: italic;
+        }
+
         .contractor-name {
             font-weight: bold;
             margin-bottom: 5px;
@@ -253,6 +309,30 @@
         <button class="back-btn" onclick="goBack()">← Back to Dashboard</button>
     </div>
 
+    <div style="border: 1px solid #80ff80; padding: 15px; margin-bottom: 20px; background-color: #000;">
+        <h3 style="margin-top: 0;">Filter Properties</h3>
+        <div style="display: grid; grid-template-columns: repeat(auto-fit, minmax(200px, 1fr)); gap: 10px;">
+            <input type="text" id="filterPropertyName" placeholder="🔍 Property name..."
+                   style="padding: 8px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+                   oninput="filterBoard()">
+            <input type="text" id="filterAddress" placeholder="🔍 Address..."
+                   style="padding: 8px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+                   oninput="filterBoard()">
+            <input type="text" id="filterManager" placeholder="🔍 Manager..."
+                   style="padding: 8px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+                   oninput="filterBoard()">
+            <select id="filterTriggerType" onchange="filterBoard()"
+                    style="padding: 8px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;">
+                <option value="">All Triggers</option>
+                <option value="zero_tolerance">Zero Tolerance</option>
+                <option value="half_inch">0.5 inch</option>
+                <option value="one_inch">1 inch</option>
+                <option value="two_inch">2 inch</option>
+                <option value="custom">Custom</option>
+            </select>
+        </div>
+    </div>
+
     <div id="boardContainer" class="board-container">
         <div class="message loading">Loading property board...</div>
     </div>
@@ -261,6 +341,7 @@
         // Use API_BASE_URL from config.js (loaded globally)
         const API_BASE_URL = window.API_BASE_URL || 'https://snow-contractor.com';
         let allContractors = [];
+        let allProperties = [];
         let currentUserRole = null;
 
         async function initializePage() {
@@ -372,30 +453,69 @@
                     return;
                 }
 
-                const properties = await response.json();
-                console.log('Loaded properties:', properties);
+                allProperties = await response.json();
+                console.log('Loaded properties:', allProperties);
 
-                if (properties.length === 0) {
+                if (allProperties.length === 0) {
                     container.innerHTML = '<div class="message">No properties found. Add properties first.</div>';
                     return;
                 }
 
-                // Clear container
-                container.innerHTML = '';
-
-                // Create a column for each property
-                properties.forEach(property => {
-                    const column = createPropertyColumn(property);
-                    container.appendChild(column);
-                    // Populate dropdown AFTER column is added to DOM
-                    populateContractorDropdown(property);
-                });
+                renderBoard(allProperties);
 
             } catch (error) {
                 console.error('[DEBUG] Exception loading property board:', error);
                 console.error('Error loading property board:', error);
                 container.innerHTML = `<div class="message error">❌ Cannot connect to server at ${API_BASE_URL}. Please ensure the server is running.</div>`;
             }
+        }
+
+        function renderBoard(properties) {
+            const container = document.getElementById('boardContainer');
+            container.innerHTML = '';
+
+            // Create a column for each property
+            properties.forEach(property => {
+                const column = createPropertyColumn(property);
+                container.appendChild(column);
+                // Populate dropdown AFTER column is added to DOM
+                populateContractorDropdown(property);
+            });
+        }
+
+        function filterBoard() {
+            const nameFilter = document.getElementById('filterPropertyName').value.toLowerCase();
+            const addressFilter = document.getElementById('filterAddress').value.toLowerCase();
+            const managerFilter = document.getElementById('filterManager').value.toLowerCase();
+            const triggerFilter = document.getElementById('filterTriggerType').value;
+
+            console.log('Filtering with trigger:', triggerFilter);
+
+            const filteredProperties = allProperties.filter(property => {
+                const matchesName = !nameFilter || property.name.toLowerCase().includes(nameFilter);
+                const matchesAddress = !addressFilter || property.address.toLowerCase().includes(addressFilter);
+                const matchesManager = !managerFilter || (property.area_manager && property.area_manager.toLowerCase().includes(managerFilter));
+
+                // Handle null/undefined trigger_type - treat as 'two_inch' (default)
+                const propertyTrigger = property.trigger_type || 'two_inch';
+                const matchesTrigger = !triggerFilter || propertyTrigger === triggerFilter;
+
+                // Debug logging
+                if (triggerFilter) {
+                    console.log(`Property ${property.name}: trigger_type=${property.trigger_type}, normalized=${propertyTrigger}, matches=${matchesTrigger}`);
+                }
+
+                return matchesName && matchesAddress && matchesManager && matchesTrigger;
+            });
+
+            console.log(`Filtered ${filteredProperties.length} properties out of ${allProperties.length}`);
+
+            if (filteredProperties.length === 0) {
+                document.getElementById('boardContainer').innerHTML = '<div class="message">No properties match your filter criteria.</div>';
+                return;
+            }
+
+            renderBoard(filteredProperties);
         }
 
         function createPropertyColumn(property) {
@@ -449,16 +569,29 @@
 
         function createContractorCard(propertyId, contractor) {
             const card = document.createElement('div');
-            card.className = `contractor-card ${contractor.is_primary ? 'primary' : ''}`;
+            const acceptanceClass = contractor.acceptance_status || 'pending';
+            card.className = `contractor-card ${contractor.is_primary ? 'primary' : ''} acceptance-${acceptanceClass}`;
             card.id = `card-${propertyId}-${contractor.contractor_id}`;
+
+            let statusBadge = '';
+            if (contractor.acceptance_status === 'pending') {
+                statusBadge = '<span class="acceptance-badge pending">⏳ PENDING</span>';
+            } else if (contractor.acceptance_status === 'accepted') {
+                statusBadge = '<span class="acceptance-badge accepted">✓ ACCEPTED</span>';
+            } else if (contractor.acceptance_status === 'declined') {
+                statusBadge = '<span class="acceptance-badge declined">✗ DECLINED</span>';
+            }
 
             card.innerHTML = `
                 <div class="contractor-name">
                     ${escapeHtml(contractor.name)}
                     ${contractor.is_primary ? '<span class="primary-badge">PRIMARY</span>' : ''}
+                    ${statusBadge}
                 </div>
                 <div class="contractor-role">[${escapeHtml(contractor.role)}]</div>
                 <div class="contractor-email">${escapeHtml(contractor.email)}</div>
+                ${contractor.acceptance_status === 'accepted' && contractor.accepted_at ? `<div class="acceptance-info">Accepted: ${new Date(contractor.accepted_at).toLocaleString()}</div>` : ''}
+                ${contractor.acceptance_status === 'declined' && contractor.declined_at ? `<div class="acceptance-info">Declined: ${new Date(contractor.declined_at).toLocaleString()}</div>` : ''}
                 ${!contractor.is_primary ? `<button class="set-primary-btn" onclick="setPrimaryContractor(${propertyId}, ${contractor.contractor_id})">Set as Primary</button>` : ''}
                 <button class="remove-btn" onclick="removeContractor(${propertyId}, ${contractor.contractor_id})">✕ Remove</button>
             `;
@@ -607,5 +740,6 @@
             return div.innerHTML;
         }
     </script>
+  <script src="/static/ai-chat-widget.js"></script>
 </body>
 </html>

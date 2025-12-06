@@ -81,22 +81,70 @@
         max-width: 800px;
         background-color: #000;
       }
+
+      .dashboard-switcher {
+        background-color: #0a0a0a;
+        border: 1px solid #80ff80;
+        padding: 15px;
+        margin-bottom: 20px;
+        border-radius: 4px;
+      }
+
+      .dashboard-switcher h4 {
+        margin-top: 0;
+        border: none;
+        padding-bottom: 10px;
+        font-size: 14px;
+      }
+
+      .dashboard-switcher-buttons {
+        display: grid;
+        grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+        gap: 10px;
+      }
+
+      .dashboard-switcher button {
+        padding: 10px;
+        font-size: 12px;
+        margin: 0;
+      }
+
+      .dashboard-switcher button.active {
+        background-color: #004400;
+        border-color: #00ff00;
+      }
     </style>
 </head>
 <body onload="initializePage()">
 <div class="container">
+  <div id="dashboardSwitcher" class="dashboard-switcher" style="display: none;">
+    <h4>👤 Switch Dashboard View (Admin Only)</h4>
+    <div class="dashboard-switcher-buttons">
+      <button class="active" onclick="location.href='/static/AdminDashboard.html'">🔧 Admin Dashboard</button>
+      <button onclick="location.href='/static/ManagerDashboard.html'">📊 Manager Dashboard</button>
+      <button onclick="location.href='/static/UserDashboard.html'">👷 User Dashboard</button>
+    </div>
+  </div>
+
   <h2>Admin Dashboard</h2>
 
   <div class="section">
     <h3>Manage</h3>
     <button onclick="window.location.href='/static/PropertyInfo.html'">Manage Properties</button>
+    <button onclick="window.location.href='/static/PropertyMap.html'">🗺️ Property Map View</button>
+    <button onclick="window.location.href='/static/ManagePropertyLists.html'">📋 Property Lists</button>
+    <button onclick="window.location.href='/static/ManageRoutes.html'">🛣️ Route Management</button>
+    <button onclick="window.location.href='/static/ManageWinterEvents.html'" style="background-color: #003366; border-color: #6699ff; color: #6699ff; font-weight: bold;">❄️ Winter Events (Start/End Storm Events)</button>
+    <button onclick="window.location.href='/static/WeatherDashboard.html'">🌨️ Weather Dashboard</button>
     <button onclick="window.location.href='/static/PropertyBoard.html'">📍 Property Board (Assign Contractors)</button>
     <button onclick="window.location.href='/static/ManageUsers.html'">Manage Users</button>
     <button onclick="window.location.href='/static/ApprovePendingUsers.html'">✓ Approve Pending Users</button>
+    <button onclick="window.location.href='/static/SMSConversations.html'" style="background-color: #1a1a2e; border-color: #00d4ff; color: #00d4ff; font-weight: bold;">📱 SMS Conversations (Text Message Tickets)</button>
   </div>
 
   <div class="section">
     <h3>Settings</h3>
+    <button onclick="window.location.href='/static/APISettings.html'">🔧 API Settings (OpenAI, Weather, etc.)</button>
     <input type="email" id="adminEmail" placeholder="Enter admin email for signup alerts" />
     <button onclick="updateAdminEmail()">Update Signup Notification Email</button>
     <p id="emailUpdateMsg"></p>
@@ -127,13 +175,13 @@
     <h3>Submit Logs</h3>
     <button onclick="window.location.href='/static/MyTickets.html'" style="background-color: #003300; font-weight: bold;">🎫 My Active Tickets</button>
     <button onclick="window.location.href='/static/WinterOpsLog.html'">Submit Winter Log</button>
-    <button onclick="window.location.href='/static/GreenOpsLog.html'">Submit Green Log</button>
+    <button onclick="alert('Green Operations Log - Coming Soon!')" style="opacity: 0.6; cursor: not-allowed;">Submit Green Log (Coming Soon)</button>
   </div>
 
   <div class="section">
     <h3>View Logs</h3>
     <button onclick="window.location.href='/static/ViewWinterLogs.html'">View Winter Logs</button>
-    <button onclick="window.location.href='/static/ViewGreenLogs.html'">View Green Logs</button>
+    <button onclick="alert('Green Logs viewing - Coming Soon!')" style="opacity: 0.6; cursor: not-allowed;">View Green Logs (Coming Soon)</button>
     <button onclick="window.location.href='/static/EquipmentUsageReport.html'">Equipment Usage Report</button>
   </div>
 
@@ -160,7 +208,25 @@
 <script>
 function initializePage() {
   checkAccess(['Admin']);
+  showDashboardSwitcher();
   loadSignupRequests();
+}
+
+function showDashboardSwitcher() {
+  const token = localStorage.getItem("token");
+  if (!token) return;
+
+  try {
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const role = payload.role;
+
+    // Only show switcher for Admin users
+    if (role === "Admin") {
+      document.getElementById('dashboardSwitcher').style.display = 'block';
+    }
+  } catch (err) {
+    console.error('Error checking user role:', err);
+  }
 }
 
 async function loadSignupRequests() {

@@ -15,6 +15,7 @@ class ReportFilters(BaseModel):
     end_date: Optional[str] = None
     property_id: Optional[int] = None
     user_id: Optional[int] = None
+    contractor_name: Optional[str] = None
 
 @router.post("/report/by-product/")
 def report_by_product(filters: ReportFilters):
@@ -336,6 +337,142 @@ def export_property_logs(filters: ReportFilters):
     output.seek(0)
 
     filename = f"property_logs_{start}_{end}.xlsx" if start and end else "property_logs.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+@router.post("/export/winter-logs/")
+def export_winter_logs(filters: ReportFilters):
+    """
+    Export winter operations logs in Excel format
+    Comprehensive export with all log details for the ViewWinterLogs page
+    """
+    start = filters.start_date
+    end = filters.end_date
+    property_id = filters.property_id
+    contractor_name = filters.contractor_name
+
+    where_parts = []
+    params = []
+
+    if start and end:
+        where_parts.append("w.time_in BETWEEN %s AND %s")
+        params += [start, end]
+
+    if property_id:
+        where_parts.append("w.property_id = %s")
+        params.append(property_id)
+
+    if contractor_name:
+        where_parts.append("w.contractor_name = %s")
+        params.append(contractor_name)
+
+    where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
+
+    query = f"""
+        SELECT
+            DATE(w.time_in) as work_date,
+            l.name as property_name,
+            w.contractor_name,
+            w.worker_name,
+            w.equipment,
+            w.time_in,
+            w.time_out,
+            TIMESTAMPDIFF(SECOND, w.time_in, w.time_out) / 3600 as hours,
+            w.bulk_salt_qty,
+            w.bag_salt_qty,
+            w.calcium_chloride_qty,
+            w.customer_provided,
+            w.notes,
+            we.event_name as winter_event_name
+        FROM winter_ops_logs w
+        JOIN locations l ON w.property_id = l.id
+        LEFT JOIN winter_events we ON w.winter_event_id = we.id
+        {where_clause}
+        ORDER BY w.time_in DESC
+    """
+
+    logs = fetch_query(query, params if params else None)
+
+    if not logs:
+        raise HTTPException(status_code=404, detail="No logs found for the specified filters")
+
+    output = BytesIO()
+
+    # Create comprehensive Excel export
+    export_data = []
+
+    # Header row
+    export_data.append([
+        'Date', 'Property', 'Contractor', 'Worker', 'Equipment',
+        'Time In', 'Time Out', 'Hours', 'Bulk Salt (tons)', 'Bag Salt',
+        'Calcium Chloride (lbs)', 'Customer Provided', 'Notes', 'Winter Event'
+    ])
+
+    # Calculate totals
+    total_hours = 0
+    total_bulk_salt = 0
+    total_bag_salt = 0
+    total_calcium = 0
+
+    # Data rows
+    for row in logs:
+        work_date = pd.to_datetime(row['work_date']).strftime('%m/%d/%Y')
+        time_in = pd.to_datetime(row['time_in']).strftime('%m/%d/%Y %H:%M')
+        time_out = pd.to_datetime(row['time_out']).strftime('%m/%d/%Y %H:%M') if row['time_out'] else ''
+        hours = round(row['hours'], 2) if row['hours'] else 0
+
+        total_hours += hours
+        total_bulk_salt += float(row['bulk_salt_qty'] or 0)
+        total_bag_salt += float(row['bag_salt_qty'] or 0)
+        total_calcium += float(row['calcium_chloride_qty'] or 0)
+
+        export_data.append([
+            work_date,
+            row['property_name'],
+            row['contractor_name'] or '',
+            row['worker_name'] or '',
+            row['equipment'] or '',
+            time_in,
+            time_out,
+            hours,
+            row['bulk_salt_qty'] if row['bulk_salt_qty'] else '',
+            row['bag_salt_qty'] if row['bag_salt_qty'] else '',
+            row['calcium_chloride_qty'] if row['calcium_chloride_qty'] else '',
+            'Yes' if row['customer_provided'] else 'No',
+            row['notes'] if row['notes'] else '',
+            row['winter_event_name'] if row['winter_event_name'] else ''
+        ])
+
+    # Add totals row
+    export_data.append([])
+    export_data.append([
+        'TOTALS', f'{len(logs)} logs', '', '', '', '', '',
+        f'{total_hours:.2f}', f'{total_bulk_salt:.2f}', f'{total_bag_salt}',
+        f'{total_calcium:.2f}', '', '', ''
+    ])
+
+    # Create DataFrame and export
+    df = pd.DataFrame(export_data)
+
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Winter Logs', index=False, header=False)
+
+        # Auto-adjust column widths
+        worksheet = writer.sheets['Winter Logs']
+        for idx, col in enumerate(df.columns):
+            max_length = max(
+                df[col].astype(str).map(len).max(),
+                len(str(col))
+            )
+            worksheet.column_dimensions[chr(65 + idx)].width = min(max_length + 2, 50)
+
+    output.seek(0)
+
+    filename = f"winter_logs_{start}_{end}.xlsx" if start and end else "winter_logs.xlsx"
 
     return StreamingResponse(
         output,

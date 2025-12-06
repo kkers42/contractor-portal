@@ -58,18 +58,59 @@
             text-align: center;
             margin-top: 10px;
         }
+        .dashboard-switcher {
+            background-color: #0a0a0a;
+            border: 1px solid #80ff80;
+            padding: 15px;
+            margin-bottom: 20px;
+            border-radius: 4px;
+        }
+        .dashboard-switcher h4 {
+            margin-top: 0;
+            color: #80ff80;
+            font-size: 14px;
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+        }
+        .dashboard-switcher-buttons {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(180px, 1fr));
+            gap: 10px;
+        }
+        .dashboard-switcher button {
+            padding: 10px;
+            font-size: 12px;
+            margin: 0;
+        }
+        .dashboard-switcher button.active {
+            background-color: #004400;
+            border-color: #00ff00;
+            font-weight: bold;
+        }
     </style>
 </head>
-<body onload="checkAccess(['Subcontractor', 'User'])">
+<body onload="initializePage()">
 
 <div class="container">
+    <div id="dashboardSwitcher" class="dashboard-switcher" style="display: none;">
+        <h4>👤 Switch Dashboard View (Admin Only)</h4>
+        <div class="dashboard-switcher-buttons">
+            <button onclick="location.href='/static/AdminDashboard.html'">🔧 Admin Dashboard</button>
+            <button onclick="location.href='/static/ManagerDashboard.html'">📊 Manager Dashboard</button>
+            <button class="active" onclick="location.href='/static/UserDashboard.html'">👷 User Dashboard</button>
+        </div>
+    </div>
+
     <h2>User Dashboard</h2>
     <button onclick="window.location.href='/static/MyTickets.html'" style="background-color: #003300; font-weight: bold;">🎫 My Active Tickets</button>
     <button onclick="window.location.href='/static/PropertyInfo.html'">View Properties</button>
+    <button onclick="window.location.href='/static/PropertyMap.html'">🗺️ Property Map</button>
+    <button onclick="window.location.href='/static/ManageRoutes.html'">🛣️ My Routes</button>
     <button onclick="window.location.href='/static/WinterOpsLog.html'">Submit Winter Log</button>
-    <button onclick="window.location.href='/static/GreenOpsLog.html'">Submit Green Log</button>
+    <button onclick="alert('Green Operations Log - Coming Soon!')" style="opacity: 0.6; cursor: not-allowed;">Submit Green Log (Coming Soon)</button>
     <button onclick="window.location.href='/static/ViewWinterLogs.html'">View Winter Logs</button>
-    <button onclick="window.location.href='/static/ViewGreenLogs.html'">View Green Logs</button>
+    <button onclick="alert('Green Logs viewing - Coming Soon!')" style="opacity: 0.6; cursor: not-allowed;">View Green Logs (Coming Soon)</button>
     <button onclick="window.location.href='/static/EquipmentUsageReport.html'">Equipment Usage Report</button>
 
     <div class="password-section">
@@ -85,6 +126,28 @@
 </div>
 
 <script>
+    function initializePage() {
+        checkAccess(['Subcontractor', 'User', 'Admin', 'Manager']);
+        showDashboardSwitcher();
+    }
+
+    function showDashboardSwitcher() {
+        const token = localStorage.getItem("token");
+        if (!token) return;
+
+        try {
+            const payload = JSON.parse(atob(token.split(".")[1]));
+            const role = payload.role;
+
+            // Only show switcher for Admin users
+            if (role === "Admin") {
+                document.getElementById('dashboardSwitcher').style.display = 'block';
+            }
+        } catch (err) {
+            console.error('Error checking user role:', err);
+        }
+    }
+
     function checkAccess(allowedRoles) {
         const token = localStorage.getItem('token');
         if (!token) {

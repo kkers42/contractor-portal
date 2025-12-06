@@ -33,7 +33,14 @@
       "Bash(find:*)",
       "Bash(for:*)",
       "Bash(do)",
-      "Bash(python create_system_map.py:*)"
+      "Bash(python create_system_map.py:*)",
+      "Bash(python -c \"\nfrom db import fetch_query, execute_query\n\n# Check what''s in the api_keys table for mapbox\nresult = fetch_query(''SELECT key_name, LEFT(key_value, 50) as key_preview, user_id FROM api_keys WHERE key_name = %s'', (''mapbox_token'',))\nprint(''Current Mapbox tokens in database:'')\nif result:\n    for row in result:\n        print(f\"\"  Key: {row[''key_name'']}, Preview: {row[''key_preview'']}, User ID: {row[''user_id'']}\"\")\nelse:\n    print(''  No mapbox_token found in database'')\n\")",
+      "Bash(\"r:\\Contractor App\\app\\static\\PropertyMap_mapbox.html\")",
+      "Bash(python3:*)",
+      "Bash(md5sum:*)",
+      "Bash(do scp \"R:\\Contractor App\\app\\static$file\" root@72.61.0.186:/opt/contractor-portal/app/static/\"$file\")",
+      "Bash(python:*)",
+      "Bash(do grep -L ai-chat-widget.js $file)"
     ],
     "deny": [],
     "ask": []

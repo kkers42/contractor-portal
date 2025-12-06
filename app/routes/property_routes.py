@@ -19,6 +19,11 @@ class PropertyData(BaseModel):
     trigger_amount: float | None = 2.0
     contract_tier: str | None = "Standard"
     open_by_time: str | None = None
+    billing_type: str | None = "hourly"
+    plow_rate: float | None = None
+    salt_rate: float | None = None
+    sidewalk_deice_rate: float | None = None
+    sidewalk_snow_rate: float | None = None
 
 class PropertyUpdate(PropertyData):
     id: int
@@ -36,8 +41,8 @@ def add_property(property_data: PropertyData):
         )
 
     query = """
-        INSERT INTO locations (name, address, sqft, area_manager, plow, salt, trigger_type, trigger_amount, contract_tier, open_by_time)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        INSERT INTO locations (name, address, sqft, area_manager, plow, salt, trigger_type, trigger_amount, contract_tier, open_by_time, billing_type, plow_rate, salt_rate, sidewalk_deice_rate, sidewalk_snow_rate)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     params = (
         property_data.name,
@@ -49,7 +54,12 @@ def add_property(property_data: PropertyData):
         property_data.trigger_type,
         property_data.trigger_amount,
         property_data.contract_tier,
-        property_data.open_by_time
+        property_data.open_by_time,
+        property_data.billing_type,
+        property_data.plow_rate,
+        property_data.salt_rate,
+        property_data.sidewalk_deice_rate,
+        property_data.sidewalk_snow_rate
     )
     try:
         execute_query(query, params)
@@ -69,7 +79,8 @@ def update_property(property_data: PropertyUpdate):
     query = """
         UPDATE locations
         SET name = %s, address = %s, sqft = %s, area_manager = %s, plow = %s, salt = %s,
-            trigger_type = %s, trigger_amount = %s, contract_tier = %s, open_by_time = %s
+            trigger_type = %s, trigger_amount = %s, contract_tier = %s, open_by_time = %s,
+            billing_type = %s, plow_rate = %s, salt_rate = %s, sidewalk_deice_rate = %s, sidewalk_snow_rate = %s
         WHERE id = %s
     """
     params = (
@@ -83,6 +94,11 @@ def update_property(property_data: PropertyUpdate):
         property_data.trigger_amount,
         property_data.contract_tier,
         property_data.open_by_time,
+        property_data.billing_type,
+        property_data.plow_rate,
+        property_data.salt_rate,
+        property_data.sidewalk_deice_rate,
+        property_data.sidewalk_snow_rate,
         property_data.id
     )
     try:
@@ -230,7 +246,8 @@ def get_property_board(current_user: dict = Depends(get_current_user)):
     try:
         # Get all properties
         properties_query = """
-            SELECT id, name, address, sqft, area_manager, plow, salt
+            SELECT id, name, address, sqft, area_manager, plow, salt,
+                   trigger_type, trigger_amount, contract_tier, open_by_time
             FROM locations
             ORDER BY name
         """
@@ -246,6 +263,9 @@ def get_property_board(current_user: dict = Depends(get_current_user)):
                 pc.contractor_id,
                 pc.is_primary,
                 pc.assigned_date,
+                pc.acceptance_status,
+                pc.accepted_at,
+                pc.declined_at,
                 u.name as contractor_name,
                 u.email as contractor_email,
                 u.role as contractor_role,
@@ -271,7 +291,10 @@ def get_property_board(current_user: dict = Depends(get_current_user)):
                     'role': assignment['contractor_role'],
                     'phone': assignment['contractor_phone'],
                     'is_primary': assignment['is_primary'],
-                    'assigned_date': assignment['assigned_date'].isoformat() if assignment['assigned_date'] else None
+                    'assigned_date': assignment['assigned_date'].isoformat() if assignment['assigned_date'] else None,
+                    'acceptance_status': assignment['acceptance_status'],
+                    'accepted_at': assignment['accepted_at'].isoformat() if assignment['accepted_at'] else None,
+                    'declined_at': assignment['declined_at'].isoformat() if assignment['declined_at'] else None
                 })
 
         # Attach contractors to each property

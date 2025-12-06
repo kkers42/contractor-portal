@@ -11,3 +11,5 @@ authlib
 itsdangerous
 mcp
 requests
+twilio
+anthropic

@@ -123,15 +123,69 @@
     #bulkImportInput {
       display: none;
     }
+    .filter-bar {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      flex-wrap: wrap;
+      align-items: center;
+      padding: 15px;
+      background-color: #0a0a0a;
+      border: 1px solid #80ff80;
+      border-radius: 4px;
+    }
+    .filter-select {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 8px 12px;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+      border-radius: 4px;
+      min-width: 180px;
+    }
+    .filter-select:focus {
+      outline: none;
+      border-color: #a0ffa0;
+      background-color: #3a3a3a;
+    }
   </style>
 </head>
 <body onload="initializePage()">
   <h2>All Properties</h2>
 
   <div class="action-bar">
+    <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
     <button class="btn" onclick="openAddModal()">+ Add Property</button>
     <button class="btn" onclick="document.getElementById('bulkImportInput').click()">Bulk Import (Excel)</button>
     <input type="file" id="bulkImportInput" accept=".xlsx,.xls" onchange="handleBulkImport(event)">
+  </div>
+
+  <div class="filter-bar">
+    <select id="filterManager" class="filter-select" onchange="applyFilters()">
+      <option value="">All Managers</option>
+    </select>
+    <select id="filterTrigger" class="filter-select" onchange="applyFilters()">
+      <option value="">All Trigger Types</option>
+      <option value="zero_tolerance">Zero Tolerance (0")</option>
+      <option value="half_inch">0.5" Trigger</option>
+      <option value="one_inch">1" Trigger</option>
+      <option value="two_inch">2" Trigger</option>
+      <option value="custom">Custom Trigger</option>
+    </select>
+    <select id="filterTier" class="filter-select" onchange="applyFilters()">
+      <option value="">All Contract Tiers</option>
+      <option value="Premium">Premium</option>
+      <option value="Standard">Standard</option>
+      <option value="Basic">Basic</option>
+    </select>
+    <select id="filterService" class="filter-select" onchange="applyFilters()">
+      <option value="">All Services</option>
+      <option value="plow">Plow Only</option>
+      <option value="salt">Salt Only</option>
+      <option value="both">Both Services</option>
+    </select>
+    <button class="btn" onclick="clearFilters()">Clear Filters</button>
   </div>
 
   <table>
@@ -218,6 +272,38 @@
         </div>
 
         <div class="form-group">
+          <label>Billing Type:</label>
+          <select id="propertyBillingType" onchange="toggleBillingFields()">
+            <option value="hourly">Hourly Rate (Current Setup)</option>
+            <option value="per_occurrence">Per Occurrence</option>
+          </select>
+        </div>
+
+        <div id="perOccurrenceRates" style="display: none; border: 1px solid #80ff80; padding: 15px; margin-top: 10px;">
+          <h4 style="margin-top: 0; color: #80ff80;">Per Occurrence Rates</h4>
+
+          <div class="form-group">
+            <label>Plow Rate ($):</label>
+            <input type="number" id="propertyPlowRate" step="0.01" min="0" placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label>Salt Rate ($):</label>
+            <input type="number" id="propertySaltRate" step="0.01" min="0" placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label>Sidewalk De-Ice Rate ($):</label>
+            <input type="number" id="propertySidewalkDeiceRate" step="0.01" min="0" placeholder="0.00">
+          </div>
+
+          <div class="form-group">
+            <label>Sidewalk Snow Removal Rate ($):</label>
+            <input type="number" id="propertySidewalkSnowRate" step="0.01" min="0" placeholder="0.00">
+          </div>
+        </div>
+
+        <div class="form-group">
           <button type="submit" class="btn">Save Property</button>
           <button type="button" class="btn" onclick="closeModal()">Cancel</button>
         </div>
@@ -226,6 +312,8 @@
   </div>
 
   <script>
+    let allProperties = []; // Store all properties for filtering
+
     async function initializePage() {
       checkAccess(['Admin', 'Manager', 'Subcontractor', 'User']);
       await fetchProperties();
@@ -241,53 +329,158 @@
           }
         });
 
-        const data = await response.json();
-        const tbody = document.getElementById("propertyTableBody");
-        tbody.innerHTML = "";
-
-        data.forEach(p => {
-          const row = document.createElement("tr");
-          row.innerHTML = `
-            <td>${p.name}</td>
-            <td>${p.address}</td>
-            <td>${p.sqft}</td>
-            <td>${p.area_manager}</td>
-            <td>${p.plow ? "Yes" : "No"}</td>
-            <td>${p.salt ? "Yes" : "No"}</td>
-            <td class="action-btns">
-              <button class="btn" onclick="openEditModal(${p.id}, '${p.name.replace(/'/g, "\\'")}', '${p.address.replace(/'/g, "\\'")}', ${p.sqft}, '${p.area_manager.replace(/'/g, "\\'")}', ${p.plow}, ${p.salt})">Edit</button>
-              <button class="btn btn-danger" onclick="deleteProperty(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete</button>
-            </td>
-          `;
-          tbody.appendChild(row);
-        });
+        allProperties = await response.json();
+        populateManagerFilter();
+        renderProperties(allProperties);
       } catch (err) {
         console.error("Error fetching properties:", err);
         alert("Failed to load properties.");
       }
     }
 
+    function populateManagerFilter() {
+      const managers = [...new Set(allProperties.map(p => p.area_manager))].sort();
+      const filterManager = document.getElementById('filterManager');
+
+      // Clear existing options except "All Managers"
+      filterManager.innerHTML = '<option value="">All Managers</option>';
+
+      managers.forEach(manager => {
+        const option = document.createElement('option');
+        option.value = manager;
+        option.textContent = manager;
+        filterManager.appendChild(option);
+      });
+    }
+
+    function renderProperties(properties) {
+      const tbody = document.getElementById("propertyTableBody");
+      tbody.innerHTML = "";
+
+      properties.forEach(p => {
+        const row = document.createElement("tr");
+        // Store property data as JSON in data attribute for easy editing
+        row.dataset.property = JSON.stringify(p);
+        row.innerHTML = `
+          <td>${p.name}</td>
+          <td>${p.address}</td>
+          <td>${p.sqft}</td>
+          <td>${p.area_manager}</td>
+          <td>${p.plow ? "Yes" : "No"}</td>
+          <td>${p.salt ? "Yes" : "No"}</td>
+          <td class="action-btns">
+            <button class="btn" onclick="openEditModalFromRow(this)">Edit</button>
+            <button class="btn btn-danger" onclick="deleteProperty(${p.id}, '${p.name.replace(/'/g, "\\'")}')">Delete</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+    }
+
+    function openEditModalFromRow(button) {
+      const row = button.closest('tr');
+      const property = JSON.parse(row.dataset.property);
+      openEditModal(property);
+    }
+
+    function applyFilters() {
+      const filterManager = document.getElementById('filterManager').value;
+      const filterTrigger = document.getElementById('filterTrigger').value;
+      const filterTier = document.getElementById('filterTier').value;
+      const filterService = document.getElementById('filterService').value;
+
+      let filtered = allProperties;
+
+      // Filter by manager
+      if (filterManager) {
+        filtered = filtered.filter(p => p.area_manager === filterManager);
+      }
+
+      // Filter by trigger type
+      if (filterTrigger) {
+        filtered = filtered.filter(p => p.trigger_type === filterTrigger);
+      }
+
+      // Filter by contract tier
+      if (filterTier) {
+        filtered = filtered.filter(p => p.contract_tier === filterTier);
+      }
+
+      // Filter by service type
+      if (filterService === 'plow') {
+        filtered = filtered.filter(p => p.plow && !p.salt);
+      } else if (filterService === 'salt') {
+        filtered = filtered.filter(p => p.salt && !p.plow);
+      } else if (filterService === 'both') {
+        filtered = filtered.filter(p => p.plow && p.salt);
+      }
+
+      renderProperties(filtered);
+    }
+
+    function clearFilters() {
+      document.getElementById('filterManager').value = '';
+      document.getElementById('filterTrigger').value = '';
+      document.getElementById('filterTier').value = '';
+      document.getElementById('filterService').value = '';
+      renderProperties(allProperties);
+    }
+
     function openAddModal() {
       document.getElementById('modalTitle').textContent = 'Add Property';
       document.getElementById('propertyForm').reset();
       document.getElementById('propertyId').value = '';
+      toggleBillingFields(); // Initialize billing fields visibility
       document.getElementById('propertyModal').style.display = 'block';
     }
 
-    function openEditModal(id, name, address, sqft, manager, plow, salt) {
+    function openEditModal(property) {
       document.getElementById('modalTitle').textContent = 'Edit Property';
-      document.getElementById('propertyId').value = id;
-      document.getElementById('propertyName').value = name;
-      document.getElementById('propertyAddress').value = address;
-      document.getElementById('propertySqft').value = sqft;
-      document.getElementById('propertyManager').value = manager;
-      document.getElementById('propertyPlow').checked = plow;
-      document.getElementById('propertySalt').checked = salt;
+      document.getElementById('propertyId').value = property.id;
+      document.getElementById('propertyName').value = property.name;
+      document.getElementById('propertyAddress').value = property.address;
+      document.getElementById('propertySqft').value = property.sqft;
+      document.getElementById('propertyManager').value = property.area_manager;
+      document.getElementById('propertyPlow').checked = property.plow;
+      document.getElementById('propertySalt').checked = property.salt;
+      document.getElementById('propertyTriggerType').value = property.trigger_type || 'two_inch';
+      document.getElementById('propertyTriggerAmount').value = property.trigger_amount || 2.0;
+      document.getElementById('propertyContractTier').value = property.contract_tier || 'Standard';
+      document.getElementById('propertyOpenByTime').value = property.open_by_time || '';
+
+      // Show/hide custom trigger amount field based on trigger type
+      const customGroup = document.getElementById('customTriggerGroup');
+      if (property.trigger_type === 'custom') {
+        customGroup.style.display = 'block';
+      } else {
+        customGroup.style.display = 'none';
+      }
+
+      // Populate billing type fields
+      document.getElementById('propertyBillingType').value = property.billing_type || 'hourly';
+      document.getElementById('propertyPlowRate').value = property.plow_rate || '';
+      document.getElementById('propertySaltRate').value = property.salt_rate || '';
+      document.getElementById('propertySidewalkDeiceRate').value = property.sidewalk_deice_rate || '';
+      document.getElementById('propertySidewalkSnowRate').value = property.sidewalk_snow_rate || '';
+      toggleBillingFields(); // Show/hide per occurrence fields based on billing type
+
       document.getElementById('propertyModal').style.display = 'block';
     }
 
     function closeModal() {
       document.getElementById('propertyModal').style.display = 'none';
+    }
+
+    // Toggle billing fields based on billing type
+    function toggleBillingFields() {
+      const billingType = document.getElementById('propertyBillingType').value;
+      const perOccurrenceRates = document.getElementById('perOccurrenceRates');
+
+      if (billingType === 'per_occurrence') {
+        perOccurrenceRates.style.display = 'block';
+      } else {
+        perOccurrenceRates.style.display = 'none';
+      }
     }
 
     // Close modal when clicking outside
@@ -313,6 +506,8 @@
       else if (triggerType === 'two_inch') triggerAmount = 2.0;
       else if (triggerType === 'custom') triggerAmount = parseFloat(document.getElementById('propertyTriggerAmount').value);
 
+      const billingType = document.getElementById('propertyBillingType').value;
+
       const propertyData = {
         name: document.getElementById('propertyName').value,
         address: document.getElementById('propertyAddress').value,
@@ -323,8 +518,22 @@
         trigger_type: triggerType,
         trigger_amount: triggerAmount,
         contract_tier: document.getElementById('propertyContractTier').value,
-        open_by_time: document.getElementById('propertyOpenByTime').value || null
+        open_by_time: document.getElementById('propertyOpenByTime').value || null,
+        billing_type: billingType
       };
+
+      // Add per-occurrence rates if that billing type is selected
+      if (billingType === 'per_occurrence') {
+        const plowRate = document.getElementById('propertyPlowRate').value;
+        const saltRate = document.getElementById('propertySaltRate').value;
+        const sidewalkDeiceRate = document.getElementById('propertySidewalkDeiceRate').value;
+        const sidewalkSnowRate = document.getElementById('propertySidewalkSnowRate').value;
+
+        if (plowRate) propertyData.plow_rate = parseFloat(plowRate);
+        if (saltRate) propertyData.salt_rate = parseFloat(saltRate);
+        if (sidewalkDeiceRate) propertyData.sidewalk_deice_rate = parseFloat(sidewalkDeiceRate);
+        if (sidewalkSnowRate) propertyData.sidewalk_snow_rate = parseFloat(sidewalkSnowRate);
+      }
 
       const token = localStorage.getItem("token");
 

@@ -192,8 +192,18 @@
 <body onload="initializePage()">
   <h2>Winter Operations Logs</h2>
 
+  <div style="margin: 20px 0;">
+    <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+  </div>
+
   <div class="filters">
     <div class="filter-row">
+      <div class="filter-group">
+        <label>Winter Event</label>
+        <select id="eventFilter">
+          <option value="">All Events</option>
+        </select>
+      </div>
       <div class="filter-group">
         <label>Property</label>
         <select id="propertyFilter">
@@ -284,20 +294,23 @@
           </select>
         </div>
 
-        <div class="form-row">
-          <div class="form-group">
-            <label>Contractor Name</label>
-            <input type="text" id="edit_contractor_name">
-          </div>
-          <div class="form-group">
-            <label>Worker Name</label>
-            <input type="text" id="edit_worker_name">
-          </div>
+        <div class="form-group">
+          <label>Contractor (Manager)</label>
+          <select id="edit_contractor_id">
+            <option value="">Select Contractor</option>
+          </select>
+        </div>
+
+        <div class="form-group">
+          <label>Worker Name (Last, First)</label>
+          <input type="text" id="edit_worker_name" placeholder="Doe, John">
         </div>
 
         <div class="form-group">
           <label>Equipment</label>
-          <input type="text" id="edit_equipment">
+          <select id="edit_equipment">
+            <option value="">Select Equipment</option>
+          </select>
         </div>
 
         <div class="form-row">
@@ -328,10 +341,11 @@
         </div>
 
         <div class="form-group">
-          <label>
-            <input type="checkbox" id="edit_customer_provided" style="width: auto; margin-right: 5px;">
-            Customer Provided Materials
-          </label>
+          <label>Customer Provided Product?</label>
+          <select id="edit_customer_provided">
+            <option value="false">No</option>
+            <option value="true">Yes</option>
+          </select>
         </div>
 
         <div class="form-group">
@@ -351,10 +365,13 @@
     let allLogs = [];
     let properties = [];
     let contractors = new Set();
+    let contractorsList = [];
+    let equipmentList = [];
+    let winterEvents = [];
 
     async function initializePage() {
       checkAccess(['Admin', 'Manager', 'Subcontractor', 'User']);
-      await Promise.all([fetchProperties(), fetchLogs()]);
+      await Promise.all([fetchProperties(), fetchContractors(), fetchEquipment(), fetchWinterEvents(), fetchLogs()]);
       populateFilters();
     }
 
@@ -367,6 +384,42 @@
         properties = await response.json();
       } catch (err) {
         console.error("Error fetching properties:", err);
+      }
+    }
+
+    async function fetchContractors() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/contractors/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        contractorsList = await response.json();
+      } catch (err) {
+        console.error("Error fetching contractors:", err);
+      }
+    }
+
+    async function fetchEquipment() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/equipment-rates/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        equipmentList = await response.json();
+      } catch (err) {
+        console.error("Error fetching equipment:", err);
+      }
+    }
+
+    async function fetchWinterEvents() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-events/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        winterEvents = await response.json();
+      } catch (err) {
+        console.error("Error fetching winter events:", err);
       }
     }
 
@@ -390,8 +443,19 @@
     }
 
     function populateFilters() {
+      // Populate event filter
+      const eventSelect = document.getElementById('eventFilter');
+      eventSelect.innerHTML = '<option value="">All Events</option>';
+      winterEvents.forEach(event => {
+        const option = document.createElement('option');
+        option.value = event.event_name;
+        option.textContent = `${event.event_name} (${event.status})`;
+        eventSelect.appendChild(option);
+      });
+
       // Populate property filter
       const propertySelect = document.getElementById('propertyFilter');
+      propertySelect.innerHTML = '<option value="">All Properties</option>';
       properties.forEach(prop => {
         const option = document.createElement('option');
         option.value = prop.name;
@@ -401,6 +465,7 @@
 
       // Populate contractor filter
       const contractorSelect = document.getElementById('contractorFilter');
+      contractorSelect.innerHTML = '<option value="">All Contractors</option>';
       contractors.forEach(contractor => {
         const option = document.createElement('option');
         option.value = contractor;
@@ -410,12 +475,14 @@
     }
 
     function applyFilters() {
+      const eventFilter = document.getElementById('eventFilter').value;
       const propertyFilter = document.getElementById('propertyFilter').value;
       const contractorFilter = document.getElementById('contractorFilter').value;
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
       let filtered = allLogs.filter(log => {
+        if (eventFilter && log.winter_event_name !== eventFilter) return false;
         if (propertyFilter && log.property_name !== propertyFilter) return false;
         if (contractorFilter && log.contractor_name !== contractorFilter) return false;
 
@@ -436,6 +503,7 @@
     }
 
     function clearFilters() {
+      document.getElementById('eventFilter').value = '';
       document.getElementById('propertyFilter').value = '';
       document.getElementById('contractorFilter').value = '';
       document.getElementById('startDate').value = '';
@@ -505,8 +573,56 @@
       document.getElementById('totalCalcium').textContent = totalCalcium;
     }
 
-    function exportToExcel() {
-      alert('Export to Excel feature coming soon!');
+    async function exportToExcel() {
+      const token = localStorage.getItem('token');
+      const startDate = document.getElementById('startDate').value;
+      const endDate = document.getElementById('endDate').value;
+      const propertyFilter = document.getElementById('propertyFilter').value;
+      const contractorFilter = document.getElementById('contractorFilter').value;
+
+      // Find property ID if property name is selected
+      let propertyId = null;
+      if (propertyFilter) {
+        const property = properties.find(p => p.name === propertyFilter);
+        propertyId = property ? property.id : null;
+      }
+
+      const filters = {
+        start_date: startDate || null,
+        end_date: endDate || null,
+        property_id: propertyId,
+        contractor_name: contractorFilter || null
+      };
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/export/winter-logs/`, {
+          method: 'POST',
+          headers: {
+            'Authorization': `Bearer ${token}`,
+            'Content-Type': 'application/json'
+          },
+          body: JSON.stringify(filters)
+        });
+
+        if (response.ok) {
+          // Download the Excel file
+          const blob = await response.blob();
+          const url = window.URL.createObjectURL(blob);
+          const a = document.createElement('a');
+          a.href = url;
+          a.download = `winter_logs_${startDate || 'all'}_${endDate || 'all'}.xlsx`;
+          document.body.appendChild(a);
+          a.click();
+          window.URL.revokeObjectURL(url);
+          document.body.removeChild(a);
+        } else {
+          const error = await response.json();
+          alert(`Export failed: ${error.detail || 'Unknown error'}`);
+        }
+      } catch (error) {
+        console.error('Export error:', error);
+        alert('Failed to export to Excel. Please try again.');
+      }
     }
 
     function getCurrentUserRole() {
@@ -536,12 +652,36 @@
         propertySelect.appendChild(option);
       });
 
+      // Populate the contractor dropdown
+      const contractorSelect = document.getElementById('edit_contractor_id');
+      contractorSelect.innerHTML = '<option value="">Select Contractor</option>';
+      contractorsList.forEach(contractor => {
+        const option = document.createElement('option');
+        option.value = contractor.id;
+        option.textContent = contractor.name;
+        if (contractor.name === log.contractor_name) {
+          option.selected = true;
+        }
+        contractorSelect.appendChild(option);
+      });
+
+      // Populate the equipment dropdown
+      const equipmentSelect = document.getElementById('edit_equipment');
+      equipmentSelect.innerHTML = '<option value="">Select Equipment</option>';
+      equipmentList.forEach(equip => {
+        const option = document.createElement('option');
+        option.value = equip.equipment_name;
+        option.textContent = equip.equipment_name;
+        if (equip.equipment_name === log.equipment) {
+          option.selected = true;
+        }
+        equipmentSelect.appendChild(option);
+      });
+
       // Populate form fields
       document.getElementById('edit_log_id').value = log.id;
       document.getElementById('edit_property_id').value = log.property_id || '';
-      document.getElementById('edit_contractor_name').value = log.contractor_name || '';
       document.getElementById('edit_worker_name').value = log.worker_name || '';
-      document.getElementById('edit_equipment').value = log.equipment || '';
 
       // Format datetime for input (convert to local timezone)
       if (log.time_in) {
@@ -556,7 +696,7 @@
       document.getElementById('edit_bulk_salt_qty').value = log.bulk_salt_qty || 0;
       document.getElementById('edit_bag_salt_qty').value = log.bag_salt_qty || 0;
       document.getElementById('edit_calcium_chloride_qty').value = log.calcium_chloride_qty || 0;
-      document.getElementById('edit_customer_provided').checked = log.customer_provided || false;
+      document.getElementById('edit_customer_provided').value = log.customer_provided ? 'true' : 'false';
       document.getElementById('edit_notes').value = log.notes || '';
 
       // Show modal
@@ -582,10 +722,16 @@
       const logId = document.getElementById('edit_log_id').value;
       const token = localStorage.getItem('token');
 
+      // Get contractor info from dropdown
+      const contractorSelect = document.getElementById('edit_contractor_id');
+      const contractorId = contractorSelect.value ? parseInt(contractorSelect.value) : null;
+      const contractorName = contractorSelect.value ?
+        contractorSelect.options[contractorSelect.selectedIndex].text : '';
+
       const logData = {
         property_id: parseInt(document.getElementById('edit_property_id').value),
-        contractor_id: null, // Backend will handle this
-        contractor_name: document.getElementById('edit_contractor_name').value,
+        contractor_id: contractorId,
+        contractor_name: contractorName,
         worker_name: document.getElementById('edit_worker_name').value,
         equipment: document.getElementById('edit_equipment').value,
         time_in: document.getElementById('edit_time_in').value,
@@ -593,7 +739,7 @@
         bulk_salt_qty: parseFloat(document.getElementById('edit_bulk_salt_qty').value) || 0,
         bag_salt_qty: parseFloat(document.getElementById('edit_bag_salt_qty').value) || 0,
         calcium_chloride_qty: parseFloat(document.getElementById('edit_calcium_chloride_qty').value) || 0,
-        customer_provided: document.getElementById('edit_customer_provided').checked,
+        customer_provided: document.getElementById('edit_customer_provided').value === 'true',
         notes: document.getElementById('edit_notes').value
       };
 
@@ -666,5 +812,6 @@
       }
     }
   </script>
+  <script src="/static/ai-chat-widget.js"></script>
 </body>
 </html>

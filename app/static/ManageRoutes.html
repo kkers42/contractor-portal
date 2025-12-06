@@ -1,0 +1,1139 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Routes</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script src="/static/config.js"></script>
+  <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <link rel="stylesheet" href="/static/modern-theme.css">
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 10px;
+    }
+    .action-bar {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-start;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+    .btn-danger {
+      color: #ff8080;
+      border-color: #ff8080;
+    }
+    .btn-danger:hover {
+      background-color: #3a2a2a;
+    }
+    .routes-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .route-card {
+      background-color: #0a0a0a;
+      border: 1px solid #80ff80;
+      border-radius: 8px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .route-card:hover {
+      background-color: #1a1a1a;
+      border-color: #a0ffa0;
+      transform: translateY(-2px);
+    }
+    .route-card h3 {
+      margin: 0 0 10px 0;
+      color: #80ff80;
+    }
+    .route-card .route-meta {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    .route-card .route-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .route-card .route-actions button {
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+    .route-card.template {
+      border-color: #667eea;
+    }
+    .route-card.template h3 {
+      color: #667eea;
+    }
+
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.8);
+    }
+    .modal-content {
+      background-color: #1a1a1a;
+      margin: 2% auto;
+      padding: 20px;
+      border: 2px solid #80ff80;
+      width: 90%;
+      max-width: 1000px;
+      color: #80ff80;
+      max-height: 90vh;
+      overflow-y: auto;
+    }
+    .close {
+      color: #ff8080;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .close:hover {
+      color: #ff4040;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .form-group input[type="text"], .form-group textarea {
+      width: 100%;
+      padding: 8px;
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      font-family: 'Courier New', monospace;
+    }
+    .form-group input[type="checkbox"] {
+      width: auto;
+    }
+    .property-selector {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #80ff80;
+      padding: 10px;
+      background-color: #0a0a0a;
+      margin-bottom: 15px;
+    }
+    .property-item {
+      padding: 8px;
+      margin: 5px 0;
+      background-color: #1a1a1a;
+      border: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .property-item:hover {
+      background-color: #2a2a2a;
+    }
+
+    /* Drag and drop styles */
+    .route-properties-list {
+      min-height: 100px;
+      border: 2px dashed #80ff80;
+      border-radius: 8px;
+      padding: 10px;
+      background-color: #0a0a0a;
+    }
+    .route-property-item {
+      background-color: #1a1a1a;
+      border: 1px solid #80ff80;
+      border-radius: 4px;
+      padding: 12px;
+      margin: 8px 0;
+      cursor: move;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      transition: all 0.2s;
+    }
+    .route-property-item:hover {
+      background-color: #2a2a2a;
+      border-color: #a0ffa0;
+    }
+    .route-property-item.dragging {
+      opacity: 0.5;
+    }
+    .route-property-item .handle {
+      color: #888;
+      margin-right: 10px;
+      font-size: 18px;
+    }
+    .route-property-item .info {
+      flex: 1;
+    }
+    .route-property-item .order-badge {
+      background-color: #003300;
+      border: 1px solid #80ff80;
+      border-radius: 50%;
+      width: 30px;
+      height: 30px;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: bold;
+      margin-right: 10px;
+    }
+    .empty-route {
+      text-align: center;
+      color: #888;
+      padding: 40px;
+    }
+
+    .stats-bar {
+      background-color: #0a0a0a;
+      border: 1px solid #80ff80;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 20px;
+      display: flex;
+      gap: 30px;
+      flex-wrap: wrap;
+    }
+    .stat-item {
+      display: flex;
+      flex-direction: column;
+    }
+    .stat-item .label {
+      font-size: 12px;
+      color: #888;
+    }
+    .stat-item .value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #80ff80;
+    }
+  </style>
+</head>
+<body onload="initializePage()">
+  <h2>Route Management</h2>
+
+  <div class="action-bar">
+    <button class="btn" onclick="openCreateModal()">+ Create New Route</button>
+    <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+    <button class="btn" onclick="location.href='/static/PropertyInfo.html'">← Back to Properties</button>
+  </div>
+
+  <div style="margin: 20px 0;">
+    <input type="text" id="filterInput" placeholder="🔍 Filter routes by name or owner..."
+           style="width: 100%; max-width: 500px; padding: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+           oninput="filterRoutes()">
+  </div>
+
+  <div class="routes-container" id="routesContainer"></div>
+
+  <!-- Create/Edit Route Modal -->
+  <div id="routeModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h3 id="modalTitle">Create Route</h3>
+      <form id="routeForm">
+        <input type="hidden" id="routeId">
+
+        <div class="form-group">
+          <label>Route Name:</label>
+          <input type="text" id="routeName" required>
+        </div>
+
+        <div class="form-group">
+          <label>Description:</label>
+          <textarea id="routeDescription" rows="3"></textarea>
+        </div>
+
+        <div class="form-group">
+          <label>Assign to Account Holder(s):</label>
+          <input type="text" id="userFilterInput" placeholder="🔍 Filter by name, email, or role..."
+                 style="width: 100%; padding: 8px; margin-bottom: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+                 oninput="filterUsers()">
+          <div style="max-height: 150px; overflow-y: auto; border: 1px solid #80ff80; padding: 10px; background-color: #0a0a0a;" id="userSelector">
+            <div style="text-align: center; color: #888;">Loading users...</div>
+          </div>
+          <small style="color: #888;">Select one or more users to assign this route to. Leave unchecked to keep route unassigned.</small>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="routeTemplate"> Save as Template
+          </label>
+        </div>
+
+        <div class="form-group" id="createRoutePropertySelector" style="display: none;">
+          <label>Select Properties for Route:</label>
+          <input type="text" id="createRouteFilterInput" placeholder="🔍 Filter properties by name, address, or manager..."
+                 style="width: 100%; padding: 8px; margin-bottom: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+                 oninput="filterCreateRouteProperties()">
+          <div class="property-selector" id="createPropertyList" style="max-height: 300px; overflow-y: auto;"></div>
+        </div>
+
+        <div class="form-group">
+          <button type="submit" class="btn">Save Route</button>
+          <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View Route Details Modal -->
+  <div id="viewRouteModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeViewModal()">&times;</span>
+      <h3 id="viewRouteName">Route Name</h3>
+      <div id="viewRouteMeta" class="route-meta"></div>
+
+      <div class="stats-bar" id="routeStats"></div>
+
+      <div class="action-bar">
+        <button class="btn" onclick="openAddPropertyModal()">+ Add Properties</button>
+        <button class="btn" onclick="saveRouteOrder()">💾 Save Order</button>
+      </div>
+
+      <div style="margin: 15px 0;">
+        <input type="text" id="viewRouteFilterInput" placeholder="🔍 Filter properties by name, address, or manager..."
+               style="width: 100%; padding: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+               oninput="filterViewRouteProperties()">
+      </div>
+
+      <div class="route-properties-list" id="routePropertiesList"></div>
+    </div>
+  </div>
+
+  <!-- Add Property to Route Modal -->
+  <div id="addPropertyModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeAddPropertyModal()">&times;</span>
+      <h3>Add Properties to Route</h3>
+
+      <div style="margin: 15px 0;">
+        <input type="text" id="addPropertyFilterInput" placeholder="🔍 Filter properties by name, address, or manager..."
+               style="width: 100%; padding: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+               oninput="filterAddProperties()">
+      </div>
+
+      <div class="property-selector" id="propertySelector"></div>
+
+      <div class="action-bar">
+        <button class="btn" onclick="closeAddPropertyModal()">Done</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allRoutes = [];
+    let currentRoute = null;
+    let allProperties = [];
+    let allUsers = [];
+    let draggedItem = null;
+
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager', 'Subcontractor', 'User']);
+      await fetchRoutes();
+      await fetchAllProperties();
+      await fetchAllUsers();
+    }
+
+    async function fetchAllUsers() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/users/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        allUsers = await response.json();
+      } catch (err) {
+        console.error("Error fetching users:", err);
+      }
+    }
+
+    async function fetchRoutes() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/routes/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        allRoutes = await response.json();
+        renderRoutes();
+      } catch (err) {
+        console.error("Error fetching routes:", err);
+        alert("Failed to load routes.");
+      }
+    }
+
+    async function fetchAllProperties() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/properties/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        allProperties = await response.json();
+      } catch (err) {
+        console.error("Error fetching properties:", err);
+      }
+    }
+
+    function renderRoutes() {
+      const container = document.getElementById("routesContainer");
+      container.innerHTML = "";
+
+      if (allRoutes.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No routes yet. Create one to get started!</p>';
+        return;
+      }
+
+      allRoutes.forEach(route => {
+        const card = document.createElement("div");
+        card.className = `route-card ${route.is_template ? 'template' : ''}`;
+        card.onclick = () => viewRoute(route.id);
+
+        const templateBadge = route.is_template ? ' 📋' : '';
+
+        card.innerHTML = `
+          <h3>${route.name}${templateBadge}</h3>
+          <div class="route-meta">
+            ${route.property_count} stops<br>
+            ${route.description || 'No description'}
+          </div>
+          <div class="route-actions" onclick="event.stopPropagation()">
+            <button class="btn" onclick="editRoute(${route.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteRoute(${route.id}, '${route.name.replace(/'/g, "\\'")}')">Delete</button>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function filterRoutes() {
+      const filterText = document.getElementById('filterInput').value.toLowerCase();
+      const container = document.getElementById("routesContainer");
+      container.innerHTML = "";
+
+      const filteredRoutes = allRoutes.filter(route => {
+        return route.name.toLowerCase().includes(filterText) ||
+               (route.description && route.description.toLowerCase().includes(filterText)) ||
+               route.owner_name.toLowerCase().includes(filterText);
+      });
+
+      if (filteredRoutes.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No routes match your filter.</p>';
+        return;
+      }
+
+      filteredRoutes.forEach(route => {
+        const card = document.createElement("div");
+        card.className = `route-card ${route.is_template ? 'template' : ''}`;
+        card.onclick = () => viewRoute(route.id);
+
+        const templateBadge = route.is_template ? ' 📋' : '';
+
+        card.innerHTML = `
+          <h3>${route.name}${templateBadge}</h3>
+          <div class="route-meta">
+            ${route.property_count} stops<br>
+            ${route.description || 'No description'}
+          </div>
+          <div class="route-actions" onclick="event.stopPropagation()">
+            <button class="btn" onclick="editRoute(${route.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteRoute(${route.id}, '${route.name.replace(/'/g, "\\'")}')">Delete</button>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function openCreateModal() {
+      document.getElementById('modalTitle').textContent = 'Create Route';
+      document.getElementById('routeForm').reset();
+      document.getElementById('routeId').value = '';
+      document.getElementById('createRoutePropertySelector').style.display = 'block';
+      renderCreatePropertySelector();
+      renderUserSelector();
+      document.getElementById('routeModal').style.display = 'block';
+    }
+
+    function renderUserSelector(selectedUserIds = []) {
+      const container = document.getElementById('userSelector');
+      container.innerHTML = '';
+
+      if (allUsers.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No users available.</p>';
+        return;
+      }
+
+      allUsers.forEach(user => {
+        const item = document.createElement('div');
+        item.style.marginBottom = '8px';
+
+        const isChecked = selectedUserIds.includes(user.id);
+
+        item.innerHTML = `
+          <label style="cursor: pointer; display: flex; align-items: center;">
+            <input type="checkbox" class="route-user-checkbox" value="${user.id}" ${isChecked ? 'checked' : ''} style="margin-right: 10px;">
+            <div>
+              <strong>${user.name}</strong>
+              <small style="color: #888; margin-left: 10px;">${user.email} • ${user.role}</small>
+            </div>
+          </label>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function filterUsers() {
+      const filterText = document.getElementById('userFilterInput').value.toLowerCase();
+      const container = document.getElementById('userSelector');
+      container.innerHTML = '';
+
+      // Get currently selected user IDs to preserve selection
+      const selectedUserIds = Array.from(document.querySelectorAll('.route-user-checkbox:checked'))
+        .map(cb => parseInt(cb.value));
+
+      const filteredUsers = allUsers.filter(user => {
+        return user.name.toLowerCase().includes(filterText) ||
+               user.email.toLowerCase().includes(filterText) ||
+               user.role.toLowerCase().includes(filterText);
+      });
+
+      if (filteredUsers.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No users match your filter.</p>';
+        return;
+      }
+
+      filteredUsers.forEach(user => {
+        const item = document.createElement('div');
+        item.style.marginBottom = '8px';
+
+        const isChecked = selectedUserIds.includes(user.id);
+
+        item.innerHTML = `
+          <label style="cursor: pointer; display: flex; align-items: center;">
+            <input type="checkbox" class="route-user-checkbox" value="${user.id}" ${isChecked ? 'checked' : ''} style="margin-right: 10px;">
+            <div>
+              <strong>${user.name}</strong>
+              <small style="color: #888; margin-left: 10px;">${user.email} • ${user.role}</small>
+            </div>
+          </label>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function renderCreatePropertySelector() {
+      const container = document.getElementById('createPropertyList');
+      container.innerHTML = '';
+
+      if (allProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties available.</p>';
+        return;
+      }
+
+      allProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = 'property-item';
+
+        item.innerHTML = `
+          <div>
+            <input type="checkbox" id="prop-${prop.id}" value="${prop.id}" style="margin-right: 10px;">
+            <label for="prop-${prop.id}" style="cursor: pointer;">
+              <strong>${prop.name}</strong><br>
+              <small>${prop.address} • ${prop.area_manager}</small>
+            </label>
+          </div>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function filterCreateRouteProperties() {
+      const filterText = document.getElementById('createRouteFilterInput').value.toLowerCase();
+      const container = document.getElementById('createPropertyList');
+      container.innerHTML = '';
+
+      const filteredProperties = allProperties.filter(prop => {
+        return prop.name.toLowerCase().includes(filterText) ||
+               prop.address.toLowerCase().includes(filterText) ||
+               prop.area_manager.toLowerCase().includes(filterText);
+      });
+
+      if (filteredProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties match your filter.</p>';
+        return;
+      }
+
+      filteredProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = 'property-item';
+
+        // Check if this property was previously selected
+        const wasChecked = document.getElementById(`prop-${prop.id}`)?.checked || false;
+
+        item.innerHTML = `
+          <div>
+            <input type="checkbox" id="prop-${prop.id}" value="${prop.id}" ${wasChecked ? 'checked' : ''} style="margin-right: 10px;">
+            <label for="prop-${prop.id}" style="cursor: pointer;">
+              <strong>${prop.name}</strong><br>
+              <small>${prop.address} • ${prop.area_manager}</small>
+            </label>
+          </div>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    async function editRoute(routeId) {
+      const route = allRoutes.find(r => r.id === routeId);
+      if (!route) return;
+
+      document.getElementById('modalTitle').textContent = 'Edit Route';
+      document.getElementById('routeId').value = route.id;
+      document.getElementById('routeName').value = route.name;
+      document.getElementById('routeDescription').value = route.description || '';
+      document.getElementById('routeTemplate').checked = route.is_template;
+      document.getElementById('createRoutePropertySelector').style.display = 'none';
+
+      // Load assigned users
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/routes/${routeId}/assigned-users/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        const assignedUsers = await response.json();
+        const assignedUserIds = assignedUsers.map(u => u.id);
+        renderUserSelector(assignedUserIds);
+      } catch (err) {
+        console.error('Failed to load assigned users:', err);
+        renderUserSelector();
+      }
+
+      document.getElementById('routeModal').style.display = 'block';
+    }
+
+    async function viewRoute(routeId) {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/routes/${routeId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        currentRoute = await response.json();
+
+        document.getElementById('viewRouteName').textContent = currentRoute.name;
+        document.getElementById('viewRouteMeta').innerHTML = `
+          ${currentRoute.description || 'No description'} •
+          ${currentRoute.properties.length} stops •
+          ${currentRoute.is_template ? '📋 Template' : 'Active Route'}
+        `;
+
+        renderRouteStats();
+        renderRouteProperties();
+        document.getElementById('viewRouteModal').style.display = 'block';
+      } catch (err) {
+        console.error("Error fetching route:", err);
+        alert("Failed to load route details.");
+      }
+    }
+
+    function renderRouteStats() {
+      const statsDiv = document.getElementById('routeStats');
+      const totalTime = currentRoute.properties.reduce((sum, p) => sum + (p.estimated_time_minutes || 30), 0);
+      const avgTime = currentRoute.properties.length > 0 ? (totalTime / currentRoute.properties.length).toFixed(0) : 0;
+
+      statsDiv.innerHTML = `
+        <div class="stat-item">
+          <span class="label">Total Stops</span>
+          <span class="value">${currentRoute.properties.length}</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Est. Total Time</span>
+          <span class="value">${Math.floor(totalTime / 60)}h ${totalTime % 60}m</span>
+        </div>
+        <div class="stat-item">
+          <span class="label">Avg. Time/Stop</span>
+          <span class="value">${avgTime} min</span>
+        </div>
+      `;
+    }
+
+    function renderRouteProperties() {
+      const container = document.getElementById('routePropertiesList');
+      container.innerHTML = '';
+
+      if (currentRoute.properties.length === 0) {
+        container.innerHTML = '<div class="empty-route">No properties in this route yet. Click "Add Properties" to get started.</div>';
+        return;
+      }
+
+      currentRoute.properties.forEach((prop, index) => {
+        const item = document.createElement('div');
+        item.className = 'route-property-item';
+        item.draggable = true;
+        item.dataset.propertyId = prop.id;
+        item.dataset.sequenceOrder = prop.sequence_order;
+
+        item.innerHTML = `
+          <div class="order-badge">${index + 1}</div>
+          <span class="handle">⋮⋮</span>
+          <div class="info">
+            <strong>${prop.name}</strong><br>
+            <small>${prop.address} • ${prop.area_manager}</small>
+            ${prop.notes ? `<br><small style="color: #667eea;">📝 ${prop.notes}</small>` : ''}
+          </div>
+          <div style="margin-right: 10px;">
+            <small>${prop.estimated_time_minutes || 30} min</small>
+          </div>
+          <button class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="removePropertyFromRoute(${currentRoute.id}, ${prop.id})">Remove</button>
+        `;
+
+        // Drag event listeners
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+
+        container.appendChild(item);
+      });
+    }
+
+    function filterViewRouteProperties() {
+      const filterText = document.getElementById('viewRouteFilterInput').value.toLowerCase();
+      const container = document.getElementById('routePropertiesList');
+      container.innerHTML = '';
+
+      const filteredProperties = currentRoute.properties.filter(prop => {
+        return prop.name.toLowerCase().includes(filterText) ||
+               prop.address.toLowerCase().includes(filterText) ||
+               prop.area_manager.toLowerCase().includes(filterText);
+      });
+
+      if (filteredProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties match your filter.</p>';
+        return;
+      }
+
+      filteredProperties.forEach((prop, index) => {
+        const item = document.createElement('div');
+        item.className = 'route-property-item';
+        item.draggable = true;
+        item.dataset.propertyId = prop.id;
+        item.dataset.sequenceOrder = prop.sequence_order;
+
+        item.innerHTML = `
+          <div class="order-badge">${prop.sequence_order}</div>
+          <span class="handle">⋮⋮</span>
+          <div class="info">
+            <strong>${prop.name}</strong><br>
+            <small>${prop.address} • ${prop.area_manager}</small>
+            ${prop.notes ? `<br><small style="color: #667eea;">📝 ${prop.notes}</small>` : ''}
+          </div>
+          <div style="margin-right: 10px;">
+            <small>${prop.estimated_time_minutes || 30} min</small>
+          </div>
+          <button class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="removePropertyFromRoute(${currentRoute.id}, ${prop.id})">Remove</button>
+        `;
+
+        // Drag event listeners
+        item.addEventListener('dragstart', handleDragStart);
+        item.addEventListener('dragend', handleDragEnd);
+        item.addEventListener('dragover', handleDragOver);
+        item.addEventListener('drop', handleDrop);
+
+        container.appendChild(item);
+      });
+    }
+
+    function handleDragStart(e) {
+      draggedItem = this;
+      this.classList.add('dragging');
+      e.dataTransfer.effectAllowed = 'move';
+      e.dataTransfer.setData('text/html', this.innerHTML);
+    }
+
+    function handleDragEnd(e) {
+      this.classList.remove('dragging');
+      draggedItem = null;
+    }
+
+    function handleDragOver(e) {
+      if (e.preventDefault) {
+        e.preventDefault();
+      }
+      e.dataTransfer.dropEffect = 'move';
+      return false;
+    }
+
+    function handleDrop(e) {
+      if (e.stopPropagation) {
+        e.stopPropagation();
+      }
+
+      if (draggedItem !== this) {
+        const allItems = Array.from(document.querySelectorAll('.route-property-item'));
+        const draggedIndex = allItems.indexOf(draggedItem);
+        const targetIndex = allItems.indexOf(this);
+
+        if (draggedIndex < targetIndex) {
+          this.parentNode.insertBefore(draggedItem, this.nextSibling);
+        } else {
+          this.parentNode.insertBefore(draggedItem, this);
+        }
+
+        updateSequenceOrders();
+      }
+
+      return false;
+    }
+
+    function updateSequenceOrders() {
+      const items = document.querySelectorAll('.route-property-item');
+      items.forEach((item, index) => {
+        item.dataset.sequenceOrder = index + 1;
+        const badge = item.querySelector('.order-badge');
+        badge.textContent = index + 1;
+      });
+    }
+
+    async function saveRouteOrder() {
+      const items = document.querySelectorAll('.route-property-item');
+      const propertyOrders = Array.from(items).map((item, index) => ({
+        property_id: parseInt(item.dataset.propertyId),
+        sequence_order: index + 1
+      }));
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/routes/reorder/`, {
+          method: "PUT",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            route_id: currentRoute.id,
+            property_orders: propertyOrders
+          })
+        });
+
+        const result = await response.json();
+        alert(result.message);
+      } catch (err) {
+        console.error("Error saving order:", err);
+        alert("Failed to save route order.");
+      }
+    }
+
+    function openAddPropertyModal() {
+      renderPropertySelector();
+      document.getElementById('addPropertyModal').style.display = 'block';
+    }
+
+    function renderPropertySelector() {
+      const container = document.getElementById('propertySelector');
+      container.innerHTML = '';
+
+      // Filter out properties already in the route
+      const routePropertyIds = new Set(currentRoute.properties.map(p => p.id));
+      const availableProperties = allProperties.filter(p => !routePropertyIds.has(p.id));
+
+      if (availableProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">All properties are already in this route.</p>';
+        return;
+      }
+
+      availableProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = 'property-item';
+
+        item.innerHTML = `
+          <div>
+            <strong>${prop.name}</strong><br>
+            <small>${prop.address} • ${prop.area_manager}</small>
+          </div>
+          <button class="btn" onclick="addPropertyToRoute(${prop.id})">Add</button>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function filterAddProperties() {
+      const filterText = document.getElementById('addPropertyFilterInput').value.toLowerCase();
+      const container = document.getElementById('propertySelector');
+      container.innerHTML = '';
+
+      // Filter out properties already in the route
+      const routePropertyIds = new Set(currentRoute.properties.map(p => p.id));
+      const availableProperties = allProperties.filter(p => !routePropertyIds.has(p.id));
+
+      // Apply text filter
+      const filteredProperties = availableProperties.filter(prop => {
+        return prop.name.toLowerCase().includes(filterText) ||
+               prop.address.toLowerCase().includes(filterText) ||
+               prop.area_manager.toLowerCase().includes(filterText);
+      });
+
+      if (filteredProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties match your filter.</p>';
+        return;
+      }
+
+      filteredProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = 'property-item';
+
+        item.innerHTML = `
+          <div>
+            <strong>${prop.name}</strong><br>
+            <small>${prop.address} • ${prop.area_manager}</small>
+          </div>
+          <button class="btn" onclick="addPropertyToRoute(${prop.id})">Add</button>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    async function addPropertyToRoute(propertyId) {
+      const token = localStorage.getItem("token");
+
+      // Get next sequence order
+      const nextOrder = currentRoute.properties.length + 1;
+
+      try {
+        await fetch(`${API_BASE_URL}/routes/add-property/`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            route_id: currentRoute.id,
+            property_id: propertyId,
+            sequence_order: nextOrder,
+            estimated_time_minutes: 30
+          })
+        });
+
+        // Refresh route view
+        viewRoute(currentRoute.id);
+      } catch (err) {
+        console.error("Error adding property:", err);
+        alert("Failed to add property to route.");
+      }
+    }
+
+    async function removePropertyFromRoute(routeId, propId) {
+      if (!confirm('Remove this property from the route?')) return;
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/routes/${routeId}/properties/${propId}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+        viewRoute(routeId); // Refresh the route view
+      } catch (err) {
+        console.error("Error removing property:", err);
+        alert("Failed to remove property from route.");
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('routeModal').style.display = 'none';
+    }
+
+    function closeViewModal() {
+      document.getElementById('viewRouteModal').style.display = 'none';
+      currentRoute = null;
+    }
+
+    function closeAddPropertyModal() {
+      document.getElementById('addPropertyModal').style.display = 'none';
+    }
+
+    // Close modals when clicking outside
+    window.onclick = function(event) {
+      const routeModal = document.getElementById('routeModal');
+      const viewRouteModal = document.getElementById('viewRouteModal');
+      const addPropertyModal = document.getElementById('addPropertyModal');
+
+      if (event.target == routeModal) routeModal.style.display = 'none';
+      if (event.target == viewRouteModal) closeViewModal();
+      if (event.target == addPropertyModal) closeAddPropertyModal();
+    }
+
+    // Handle route form submission
+    document.getElementById('routeForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const routeId = document.getElementById('routeId').value;
+      const routeData = {
+        name: document.getElementById('routeName').value,
+        description: document.getElementById('routeDescription').value,
+        is_template: document.getElementById('routeTemplate').checked
+      };
+
+      const token = localStorage.getItem("token");
+
+      try {
+        let response;
+        if (routeId) {
+          response = await fetch(`${API_BASE_URL}/routes/`, {
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ ...routeData, id: parseInt(routeId) })
+          });
+        } else {
+          response = await fetch(`${API_BASE_URL}/routes/`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(routeData)
+          });
+        }
+
+        const result = await response.json();
+
+        if (response.ok) {
+          const savedRouteId = routeId || result.route_id;
+
+          // Assign users to the route
+          const selectedUsers = [];
+          const userCheckboxes = document.querySelectorAll('.route-user-checkbox:checked');
+          userCheckboxes.forEach(cb => selectedUsers.push(parseInt(cb.value)));
+
+          if (selectedUsers.length > 0) {
+            try {
+              await fetch(`${API_BASE_URL}/routes/assign-users/`, {
+                method: "POST",
+                headers: {
+                  "Authorization": `Bearer ${token}`,
+                  "Content-Type": "application/json"
+                },
+                body: JSON.stringify({
+                  route_id: savedRouteId,
+                  user_ids: selectedUsers
+                })
+              });
+            } catch (err) {
+              console.error('Failed to assign users:', err);
+            }
+          }
+
+          // If creating a new route, add selected properties
+          if (!routeId && result.route_id) {
+            const selectedProperties = [];
+            const checkboxes = document.querySelectorAll('#createPropertyList input[type="checkbox"]:checked');
+            checkboxes.forEach(cb => selectedProperties.push(parseInt(cb.value)));
+
+            // Add each selected property to the route
+            for (let i = 0; i < selectedProperties.length; i++) {
+              try {
+                await fetch(`${API_BASE_URL}/routes/add-property/`, {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    route_id: result.route_id,
+                    property_id: selectedProperties[i],
+                    sequence_order: i + 1,
+                    estimated_time_minutes: 30
+                  })
+                });
+              } catch (err) {
+                console.error(`Failed to add property ${selectedProperties[i]}:`, err);
+              }
+            }
+          }
+
+          alert(result.message);
+          closeModal();
+          await fetchRoutes();
+        } else {
+          alert('Error: ' + (result.detail || 'Failed to save route'));
+        }
+      } catch (err) {
+        console.error('Error saving route:', err);
+        alert('Failed to save route. Please try again.');
+      }
+    });
+
+    async function deleteRoute(routeId, routeName) {
+      if (!confirm(`Are you sure you want to delete "${routeName}"?`)) {
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/routes/${routeId}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert(result.message);
+          await fetchRoutes();
+        } else {
+          alert('Error: ' + (result.detail || 'Failed to delete route'));
+        }
+      } catch (err) {
+        console.error('Error deleting route:', err);
+        alert('Failed to delete route. Please try again.');
+      }
+    }
+  </script>
+    <script src="/static/ai-chat-widget.js"></script>
+</body>
+</html>

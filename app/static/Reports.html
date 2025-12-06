@@ -112,8 +112,19 @@
 <body onload="initializePage()">
   <h2>Winter Operations Reports - Billing & Timesheets</h2>
 
+  <div style="margin: 20px 0;">
+    <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+  </div>
+
   <div class="filters">
     <div class="filter-row">
+      <div class="filter-group">
+        <label>❄️ Winter Event</label>
+        <select id="winterEventFilter">
+          <option value="">All Events</option>
+          <option value="no_event">⚠️ Logs Without Event</option>
+        </select>
+      </div>
       <div class="filter-group">
         <label>Property</label>
         <select id="propertyFilter">
@@ -138,6 +149,15 @@
     <button class="btn" onclick="applyFilters()">Apply Filters</button>
     <button class="btn" onclick="clearFilters()">Clear Filters</button>
     <button class="btn" onclick="exportToExcel()">Export to Excel</button>
+  </div>
+
+  <div id="orphanedLogsAlert" style="display: none; background-color: #2a1a1a; border: 2px solid #ff8080; padding: 15px; margin-bottom: 20px; border-radius: 5px;">
+    <strong style="color: #ff8080;">⚠️ Warning: Logs Outside Winter Events</strong>
+    <p style="color: #ff8080; margin: 10px 0;">
+      <span id="orphanedCount">0</span> operation log(s) have been performed outside of any winter event.
+      These logs should be assigned to an event for accurate billing.
+    </p>
+    <button class="btn" onclick="showOrphanedLogs()">View Unassigned Logs</button>
   </div>
 
   <div class="summary" id="summary" style="display: none;">
@@ -190,11 +210,27 @@
     let allLogs = [];
     let properties = [];
     let contractors = new Set();
+    let winterEvents = [];
+    let orphanedLogsCount = 0;
 
     async function initializePage() {
       checkAccess(['Admin', 'Manager', 'Subcontractor', 'User']);
-      await Promise.all([fetchProperties(), fetchLogs()]);
+
+      // Check for event_id parameter in URL
+      const urlParams = new URLSearchParams(window.location.search);
+      const eventId = urlParams.get('event_id');
+
+      await Promise.all([fetchProperties(), fetchWinterEvents(), fetchLogs()]);
       populateFilters();
+
+      // If event_id in URL, select it
+      if (eventId) {
+        document.getElementById('winterEventFilter').value = eventId;
+        applyFilters();
+      }
+
+      // Check for orphaned logs
+      checkOrphanedLogs();
     }
 
     async function fetchProperties() {
@@ -209,6 +245,19 @@
       }
     }
 
+    async function fetchWinterEvents() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-events/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+        winterEvents = await response.json();
+      } catch (err) {
+        console.error("Error fetching winter events:", err);
+        winterEvents = [];
+      }
+    }
+
     async function fetchLogs() {
       const token = localStorage.getItem("token");
       try {
@@ -218,7 +267,7 @@
         allLogs = await response.json();
 
         // Extract unique contractors
-        contractors = new Set(allLogs.map(log => log.subcontractor_name));
+        contractors = new Set(allLogs.map(log => log.contractor_name).filter(Boolean));
 
         renderLogs(allLogs);
       } catch (err) {
@@ -229,6 +278,16 @@
     }
 
     function populateFilters() {
+      // Populate winter event filter
+      const eventSelect = document.getElementById('winterEventFilter');
+      winterEvents.forEach(event => {
+        const option = document.createElement('option');
+        option.value = event.id;
+        const status = event.status === 'active' ? '🔴' : event.status === 'completed' ? '✓' : '❌';
+        option.textContent = `${status} ${event.event_name}`;
+        eventSelect.appendChild(option);
+      });
+
       // Populate property filter
       const propertySelect = document.getElementById('propertyFilter');
       properties.forEach(prop => {
@@ -240,6 +299,7 @@
 
       // Populate contractor filter
       const contractorSelect = document.getElementById('contractorFilter');
+      contractorSelect.innerHTML = '<option value="">All Contractors</option>';
       contractors.forEach(contractor => {
         const option = document.createElement('option');
         option.value = contractor;
@@ -249,14 +309,22 @@
     }
 
     function applyFilters() {
+      const eventFilter = document.getElementById('winterEventFilter').value;
       const propertyFilter = document.getElementById('propertyFilter').value;
       const contractorFilter = document.getElementById('contractorFilter').value;
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
       let filtered = allLogs.filter(log => {
+        // Winter event filter
+        if (eventFilter === 'no_event') {
+          if (log.winter_event_id !== null) return false;
+        } else if (eventFilter) {
+          if (log.winter_event_id != eventFilter) return false;
+        }
+
         if (propertyFilter && log.property_name !== propertyFilter) return false;
-        if (contractorFilter && log.subcontractor_name !== contractorFilter) return false;
+        if (contractorFilter && log.contractor_name !== contractorFilter) return false;
 
         if (startDate) {
           const logDate = new Date(log.time_in).toISOString().split('T')[0];
@@ -275,11 +343,28 @@
     }
 
     function clearFilters() {
+      document.getElementById('winterEventFilter').value = '';
       document.getElementById('propertyFilter').value = '';
       document.getElementById('contractorFilter').value = '';
       document.getElementById('startDate').value = '';
       document.getElementById('endDate').value = '';
       renderLogs(allLogs);
+    }
+
+    function checkOrphanedLogs() {
+      orphanedLogsCount = allLogs.filter(log => log.winter_event_id === null).length;
+
+      if (orphanedLogsCount > 0) {
+        document.getElementById('orphanedLogsAlert').style.display = 'block';
+        document.getElementById('orphanedCount').textContent = orphanedLogsCount;
+      } else {
+        document.getElementById('orphanedLogsAlert').style.display = 'none';
+      }
+    }
+
+    function showOrphanedLogs() {
+      document.getElementById('winterEventFilter').value = 'no_event';
+      applyFilters();
     }
 
     function renderLogs(logs) {
@@ -393,5 +478,6 @@
       }
     }
   </script>
+  <script src="/static/ai-chat-widget.js"></script>
 </body>
 </html>

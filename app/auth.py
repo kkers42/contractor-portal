@@ -1,6 +1,6 @@
 from datetime import datetime, timedelta
 from jose import JWTError, jwt
-from passlib.hash import bcrypt
+import bcrypt
 from fastapi.security import OAuth2PasswordBearer
 from dotenv import load_dotenv
 from fastapi import Depends, HTTPException, status
@@ -13,11 +13,25 @@ ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", 60))
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def hash_password(password: str) -> str:
-    return bcrypt.hash(password)
+    """Hash a password using bcrypt directly"""
+    # Ensure password is a string and encode to bytes
+    password_bytes = str(password).encode('utf-8')
+    # Truncate if needed (bcrypt max is 72 bytes)
+    password_bytes = password_bytes[:72]
+    # Generate salt and hash
+    salt = bcrypt.gensalt()
+    hashed = bcrypt.hashpw(password_bytes, salt)
+    # Return as string
+    return hashed.decode('utf-8')
 
 def verify_password(plain_password, hashed_password):
+    """Verify a password against a hash using bcrypt directly"""
     try:
-        result = bcrypt.verify(plain_password, hashed_password)
+        # Convert to bytes
+        password_bytes = str(plain_password).encode('utf-8')[:72]
+        hash_bytes = hashed_password.encode('utf-8') if isinstance(hashed_password, str) else hashed_password
+        # Verify
+        result = bcrypt.checkpw(password_bytes, hash_bytes)
         print(f"✅ Password verification result: {result}")
         return result
     except Exception as e:

@@ -1,0 +1,683 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Winter Events</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script src="/static/config.js"></script>
+  <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <link rel="stylesheet" href="/static/modern-theme.css">
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 10px;
+    }
+    .container {
+      max-width: 1400px;
+      margin: 0 auto;
+    }
+    .action-bar {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+    .btn.danger {
+      color: #ff8080;
+      border-color: #ff8080;
+    }
+    .btn.active-event {
+      background-color: #003300;
+      border-color: #80ff80;
+      font-weight: bold;
+    }
+
+    .info-box {
+      background-color: #1a1a2e;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      padding: 15px;
+      margin-bottom: 20px;
+      color: #a0a0ff;
+    }
+
+    .info-box h3 {
+      margin: 0 0 10px 0;
+      color: #667eea;
+    }
+
+    .active-event-banner {
+      background-color: #003300;
+      border: 2px solid #80ff80;
+      border-radius: 8px;
+      padding: 20px;
+      margin-bottom: 20px;
+      text-align: center;
+    }
+
+    .active-event-banner h3 {
+      margin: 0 0 10px 0;
+      color: #80ff80;
+      font-size: 20px;
+    }
+
+    .event-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(400px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .event-card {
+      background-color: #0a0a0a;
+      border: 2px solid #80ff80;
+      border-radius: 8px;
+      padding: 20px;
+      transition: all 0.2s;
+    }
+
+    .event-card.active {
+      border-color: #80ff80;
+      background-color: #001a00;
+    }
+
+    .event-card.completed {
+      border-color: #667eea;
+      opacity: 0.8;
+    }
+
+    .event-card.cancelled {
+      border-color: #888;
+      opacity: 0.6;
+    }
+
+    .event-card:hover {
+      transform: translateY(-2px);
+    }
+
+    .event-header {
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 15px;
+    }
+
+    .event-header h3 {
+      margin: 0;
+      color: #80ff80;
+    }
+
+    .event-status {
+      display: inline-block;
+      padding: 4px 12px;
+      border-radius: 12px;
+      font-size: 11px;
+      font-weight: bold;
+    }
+
+    .event-status.active {
+      background-color: #003300;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      animation: pulse 2s infinite;
+    }
+
+    @keyframes pulse {
+      0%, 100% { opacity: 1; }
+      50% { opacity: 0.7; }
+    }
+
+    .event-status.completed {
+      background-color: #1a1a2e;
+      color: #667eea;
+      border: 1px solid #667eea;
+    }
+
+    .event-status.cancelled {
+      background-color: #330000;
+      color: #ff8080;
+      border: 1px solid #ff8080;
+    }
+
+    .event-info {
+      margin: 10px 0;
+      font-size: 14px;
+    }
+
+    .event-info label {
+      color: #888;
+      font-size: 12px;
+    }
+
+    .event-dates {
+      background-color: #1a1a1a;
+      padding: 15px;
+      border-radius: 4px;
+      margin: 15px 0;
+    }
+
+    .date-row {
+      display: grid;
+      grid-template-columns: 80px 1fr;
+      margin: 8px 0;
+      font-size: 13px;
+    }
+
+    .date-label {
+      color: #888;
+    }
+
+    .date-value {
+      color: #80ff80;
+    }
+
+    .event-stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin: 15px 0;
+    }
+
+    .stat-item {
+      background-color: #1a1a1a;
+      padding: 10px;
+      border-radius: 4px;
+      text-align: center;
+    }
+
+    .stat-value {
+      font-size: 24px;
+      font-weight: bold;
+      color: #80ff80;
+    }
+
+    .stat-label {
+      font-size: 11px;
+      color: #888;
+      margin-top: 5px;
+    }
+
+    .button-group {
+      display: flex;
+      gap: 10px;
+      margin-top: 15px;
+    }
+
+    .button-group button {
+      flex: 1;
+      padding: 10px;
+      font-size: 12px;
+    }
+
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.8);
+    }
+
+    .modal-content {
+      background-color: #1a1a1a;
+      margin: 5% auto;
+      padding: 30px;
+      border: 2px solid #80ff80;
+      border-radius: 8px;
+      width: 90%;
+      max-width: 600px;
+      color: #80ff80;
+    }
+
+    .close {
+      color: #888;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+
+    .close:hover {
+      color: #80ff80;
+    }
+
+    .form-group {
+      margin: 15px 0;
+    }
+
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+      color: #80ff80;
+    }
+
+    .form-group input,
+    .form-group textarea,
+    .form-group select {
+      width: 100%;
+      padding: 10px;
+      background-color: #0a0a0a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      font-family: 'Courier New', monospace;
+      box-sizing: border-box;
+    }
+
+    .form-group textarea {
+      min-height: 80px;
+      resize: vertical;
+    }
+  </style>
+</head>
+<body onload="initializePage()">
+  <div class="container">
+    <h2>❄️ Winter Events Management</h2>
+
+    <div class="info-box">
+      <h3>💡 About Winter Events</h3>
+      <p>Winter Events track storm periods for billing and reporting. Managers and Admins can manually start/end events. All winter operation logs will be associated with events for accurate billing.</p>
+    </div>
+
+    <div id="activeEventBanner" style="display: none;"></div>
+
+    <div class="action-bar">
+      <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+      <button class="btn" onclick="showStartEventModal()">▶️ Start New Event</button>
+      <button class="btn" onclick="refreshEvents()">🔄 Refresh</button>
+    </div>
+
+    <div class="event-grid" id="eventsGrid">
+      <div style="text-align: center; color: #888; padding: 40px;">Loading events...</div>
+    </div>
+  </div>
+
+  <!-- Start Event Modal -->
+  <div id="startEventModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeStartEventModal()">&times;</span>
+      <h3>▶️ Start New Winter Event</h3>
+
+      <div class="form-group">
+        <label>Event Name: <span style="color: #ff8080;">*</span></label>
+        <input type="text" id="eventName" placeholder="e.g., Winter Storm 2025-01" required>
+      </div>
+
+      <div class="form-group">
+        <label>Description (optional):</label>
+        <textarea id="eventDescription" placeholder="Additional details about this winter event..."></textarea>
+      </div>
+
+      <div class="form-group">
+        <label>Start Date & Time: <span style="color: #ff8080;">*</span></label>
+        <input type="datetime-local" id="startDate" required>
+      </div>
+
+      <div class="button-group">
+        <button class="btn" onclick="startWinterEvent()">Start Event</button>
+        <button class="btn" onclick="closeStartEventModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- End Event Modal -->
+  <div id="endEventModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeEndEventModal()">&times;</span>
+      <h3>⏹️ End Winter Event</h3>
+
+      <p>Are you sure you want to end this event?</p>
+      <p id="endEventInfo" style="color: #888; font-size: 12px;"></p>
+
+      <div class="form-group">
+        <label>End Date & Time: <span style="color: #ff8080;">*</span></label>
+        <input type="datetime-local" id="endDate" required>
+      </div>
+
+      <input type="hidden" id="endEventId">
+
+      <div class="button-group">
+        <button class="btn" onclick="endWinterEvent()">End Event</button>
+        <button class="btn" onclick="closeEndEventModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let events = [];
+    let activeEvent = null;
+
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager']);
+
+      // Set default start date to now
+      const now = new Date();
+      now.setMinutes(now.getMinutes() - now.getTimezoneOffset());
+      document.getElementById('startDate').value = now.toISOString().slice(0, 16);
+      document.getElementById('endDate').value = now.toISOString().slice(0, 16);
+
+      await refreshEvents();
+    }
+
+    async function refreshEvents() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-events/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (!response.ok) {
+          throw new Error('Failed to fetch winter events');
+        }
+
+        events = await response.json();
+
+        // Find active event
+        activeEvent = events.find(e => e.status === 'active');
+
+        renderActiveEventBanner();
+        renderEvents();
+      } catch (err) {
+        console.error("Error fetching events:", err);
+        alert("Failed to load winter events: " + err.message);
+      }
+    }
+
+    function renderActiveEventBanner() {
+      const banner = document.getElementById('activeEventBanner');
+
+      if (activeEvent) {
+        banner.style.display = 'block';
+        banner.className = 'active-event-banner';
+
+        const startDate = new Date(activeEvent.start_date);
+        const duration = Math.floor((Date.now() - startDate.getTime()) / (1000 * 60 * 60));
+
+        banner.innerHTML = `
+          <h3>🔴 ACTIVE EVENT: ${activeEvent.event_name}</h3>
+          <p style="margin: 5px 0; color: #80ff80;">
+            Started: ${startDate.toLocaleString()} (${duration}h ago)
+          </p>
+          <p style="margin: 5px 0; color: #888; font-size: 12px;">
+            All winter operations are being logged to this event
+          </p>
+          <button class="btn" onclick="showEndEventModal(${activeEvent.id})" style="margin-top: 10px;">
+            ⏹️ End This Event
+          </button>
+        `;
+      } else {
+        banner.style.display = 'none';
+      }
+    }
+
+    function renderEvents() {
+      const container = document.getElementById('eventsGrid');
+      container.innerHTML = '';
+
+      if (events.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: #888; padding: 40px;">No winter events yet. Start a new event when a storm begins.</div>';
+        return;
+      }
+
+      events.forEach(event => {
+        const card = document.createElement('div');
+        card.className = `event-card ${event.status}`;
+
+        const startDate = new Date(event.start_date);
+        const endDate = event.end_date ? new Date(event.end_date) : null;
+        const duration = endDate
+          ? Math.floor((endDate - startDate) / (1000 * 60 * 60))
+          : Math.floor((Date.now() - startDate) / (1000 * 60 * 60));
+
+        card.innerHTML = `
+          <div class="event-header">
+            <h3>${event.event_name}</h3>
+            <span class="event-status ${event.status}">${event.status.toUpperCase()}</span>
+          </div>
+
+          ${event.description ? `
+            <div class="event-info">
+              <label>Description:</label><br>
+              ${event.description}
+            </div>
+          ` : ''}
+
+          <div class="event-dates">
+            <div class="date-row">
+              <span class="date-label">Started:</span>
+              <span class="date-value">${startDate.toLocaleString()}</span>
+            </div>
+            ${endDate ? `
+              <div class="date-row">
+                <span class="date-label">Ended:</span>
+                <span class="date-value">${endDate.toLocaleString()}</span>
+              </div>
+            ` : `
+              <div class="date-row">
+                <span class="date-label">Status:</span>
+                <span class="date-value" style="color: #80ff80;">ONGOING</span>
+              </div>
+            `}
+            <div class="date-row">
+              <span class="date-label">Duration:</span>
+              <span class="date-value">${duration} hours</span>
+            </div>
+          </div>
+
+          <div class="event-stats">
+            <div class="stat-item">
+              <div class="stat-value">${event.log_count || 0}</div>
+              <div class="stat-label">Operation Logs</div>
+            </div>
+            <div class="stat-item">
+              <div class="stat-value">${event.property_count || 0}</div>
+              <div class="stat-label">Properties Serviced</div>
+            </div>
+          </div>
+
+          <div class="event-info" style="font-size: 11px; color: #888; margin-top: 10px;">
+            Created: ${new Date(event.created_at).toLocaleString()}
+          </div>
+
+          ${event.status === 'active' ? `
+            <div class="button-group">
+              <button class="btn" onclick="showEndEventModal(${event.id})">
+                ⏹️ End Event
+              </button>
+              <button class="btn" onclick="viewEventLogs(${event.id})">
+                📋 View Logs
+              </button>
+            </div>
+          ` : `
+            <div class="button-group">
+              <button class="btn" onclick="viewEventLogs(${event.id})">
+                📋 View Logs
+              </button>
+              ${event.status !== 'cancelled' ? `
+                <button class="btn danger" onclick="cancelEvent(${event.id})">
+                  ❌ Cancel
+                </button>
+              ` : ''}
+            </div>
+          `}
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function showStartEventModal() {
+      // Check if there's already an active event
+      if (activeEvent) {
+        alert(`Cannot start a new event while "${activeEvent.event_name}" is active.\n\nPlease end the current event first.`);
+        return;
+      }
+
+      document.getElementById('startEventModal').style.display = 'block';
+    }
+
+    function closeStartEventModal() {
+      document.getElementById('startEventModal').style.display = 'none';
+      document.getElementById('eventName').value = '';
+      document.getElementById('eventDescription').value = '';
+    }
+
+    async function startWinterEvent() {
+      const eventName = document.getElementById('eventName').value.trim();
+      const description = document.getElementById('eventDescription').value.trim();
+      const startDate = document.getElementById('startDate').value;
+
+      if (!eventName || !startDate) {
+        alert('Please fill in all required fields');
+        return;
+      }
+
+      const eventData = {
+        event_name: eventName,
+        description: description || null,
+        start_date: startDate
+      };
+
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-events/`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify(eventData)
+        });
+
+        if (response.ok) {
+          alert('Winter event started successfully!');
+          closeStartEventModal();
+          await refreshEvents();
+        } else {
+          const error = await response.json();
+          alert('Error: ' + (error.detail || 'Failed to start event'));
+        }
+      } catch (err) {
+        console.error('Error starting event:', err);
+        alert('Failed to start event');
+      }
+    }
+
+    function showEndEventModal(eventId) {
+      const event = events.find(e => e.id === eventId);
+      if (!event) return;
+
+      document.getElementById('endEventId').value = eventId;
+      document.getElementById('endEventInfo').textContent =
+        `Event: ${event.event_name}\nStarted: ${new Date(event.start_date).toLocaleString()}`;
+      document.getElementById('endEventModal').style.display = 'block';
+    }
+
+    function closeEndEventModal() {
+      document.getElementById('endEventModal').style.display = 'none';
+    }
+
+    async function endWinterEvent() {
+      const eventId = document.getElementById('endEventId').value;
+      const endDate = document.getElementById('endDate').value;
+
+      if (!endDate) {
+        alert('Please select an end date');
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-events/${eventId}/complete`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({ end_date: endDate })
+        });
+
+        if (response.ok) {
+          alert('Winter event ended successfully!');
+          closeEndEventModal();
+          await refreshEvents();
+        } else {
+          const error = await response.json();
+          alert('Error: ' + (error.detail || 'Failed to end event'));
+        }
+      } catch (err) {
+        console.error('Error ending event:', err);
+        alert('Failed to end event');
+      }
+    }
+
+    async function cancelEvent(eventId) {
+      const event = events.find(e => e.id === eventId);
+      if (!event) return;
+
+      if (!confirm(`Cancel event "${event.event_name}"?\n\nThis will mark the event as cancelled but preserve all associated logs.`)) {
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/winter-events/${eventId}/cancel`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        if (response.ok) {
+          alert('Event cancelled');
+          await refreshEvents();
+        } else {
+          const error = await response.json();
+          alert('Error: ' + (error.detail || 'Failed to cancel event'));
+        }
+      } catch (err) {
+        console.error('Error cancelling event:', err);
+        alert('Failed to cancel event');
+      }
+    }
+
+    function viewEventLogs(eventId) {
+      // Redirect to Reports page with event filter
+      location.href = `/static/Reports.html?event_id=${eventId}`;
+    }
+
+    // Close modal when clicking outside
+    window.onclick = function(event) {
+      const startModal = document.getElementById('startEventModal');
+      const endModal = document.getElementById('endEventModal');
+
+      if (event.target == startModal) {
+        closeStartEventModal();
+      }
+      if (event.target == endModal) {
+        closeEndEventModal();
+      }
+    }
+  </script>
+    <script src="/static/ai-chat-widget.js"></script>
+</body>
+</html>

@@ -1,0 +1,739 @@
+<!DOCTYPE html>
+<!-- Version: 2024-11-24-v3 - Fixed Re-Geocode button with event delegation -->
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Cache-Control" content="no-cache, no-store, must-revalidate">
+  <meta http-equiv="Pragma" content="no-cache">
+  <meta http-equiv="Expires" content="0">
+  <title>Property Map</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script src="/static/config.js"></script>
+  <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <link rel="stylesheet" href="/static/modern-theme.css">
+
+  <!-- Mapbox GL JS -->
+  <script src='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.js'></script>
+  <link href='https://api.mapbox.com/mapbox-gl-js/v2.15.0/mapbox-gl.css' rel='stylesheet' />
+
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 0;
+      margin: 0;
+      overflow: hidden;
+    }
+
+    #map-container {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+    }
+
+    #map {
+      width: 100%;
+      height: 100%;
+    }
+
+    .map-overlay {
+      position: absolute;
+      top: 20px;
+      left: 20px;
+      background-color: rgba(26, 26, 26, 0.95);
+      border: 2px solid #80ff80;
+      border-radius: 8px;
+      padding: 15px;
+      max-width: 350px;
+      z-index: 1;
+      max-height: calc(100vh - 40px);
+      overflow-y: auto;
+    }
+
+    .map-overlay h2 {
+      margin: 0 0 15px 0;
+      color: #80ff80;
+      font-size: 18px;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 8px;
+    }
+
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 8px 15px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+      margin: 3px;
+      border-radius: 4px;
+    }
+
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+
+    .btn.active {
+      background-color: #003300;
+      border-color: #a0ffa0;
+    }
+
+    .filter-section {
+      margin-bottom: 15px;
+    }
+
+    .filter-section label {
+      display: block;
+      margin-bottom: 5px;
+      font-size: 12px;
+      color: #888;
+    }
+
+    .filter-section select {
+      width: 100%;
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 6px;
+      font-family: 'Courier New', monospace;
+      font-size: 12px;
+    }
+
+    .legend {
+      margin-top: 15px;
+      padding-top: 15px;
+      border-top: 1px solid #333;
+    }
+
+    .legend-item {
+      display: flex;
+      align-items: center;
+      margin: 8px 0;
+      font-size: 12px;
+    }
+
+    .legend-color {
+      width: 20px;
+      height: 20px;
+      border-radius: 50%;
+      margin-right: 10px;
+      border: 2px solid rgba(255,255,255,0.3);
+    }
+
+    .stats {
+      display: grid;
+      grid-template-columns: 1fr 1fr;
+      gap: 10px;
+      margin-bottom: 15px;
+    }
+
+    .stat-box {
+      background-color: #0a0a0a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 8px;
+      text-align: center;
+    }
+
+    .stat-box .value {
+      font-size: 20px;
+      font-weight: bold;
+      color: #80ff80;
+    }
+
+    .stat-box .label {
+      font-size: 10px;
+      color: #888;
+    }
+
+    /* Mapbox Popup Customization */
+    .mapboxgl-popup-content {
+      background-color: #1a1a1a;
+      color: #80ff80;
+      border: 2px solid #80ff80;
+      border-radius: 8px;
+      font-family: 'Courier New', monospace;
+      padding: 15px;
+    }
+
+    .mapboxgl-popup-close-button {
+      color: #ff8080;
+      font-size: 20px;
+    }
+
+    .popup-content h3 {
+      margin: 0 0 10px 0;
+      color: #80ff80;
+    }
+
+    .popup-content .detail {
+      margin: 5px 0;
+      font-size: 12px;
+    }
+
+    .popup-content .detail strong {
+      color: #a0ffa0;
+    }
+
+    .geocode-status {
+      background-color: #1a1a2e;
+      border: 1px solid #667eea;
+      border-radius: 4px;
+      padding: 10px;
+      margin-bottom: 15px;
+      font-size: 12px;
+      text-align: center;
+    }
+
+    .loading-overlay {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0,0,0,0.8);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 1000;
+      color: #80ff80;
+      font-size: 18px;
+    }
+
+    .loading-overlay.hidden {
+      display: none;
+    }
+
+    @media (max-width: 768px) {
+      .map-overlay {
+        left: 10px;
+        right: 10px;
+        top: 10px;
+        max-width: none;
+      }
+    }
+  </style>
+</head>
+<body onload="initializePage()">
+  <div id="map-container">
+    <div id="map"></div>
+
+    <div class="map-overlay">
+      <h2>🗺️ Property Map</h2>
+
+      <div class="stats" id="stats">
+        <div class="stat-box">
+          <div class="value" id="totalProperties">0</div>
+          <div class="label">Properties</div>
+        </div>
+        <div class="stat-box">
+          <div class="value" id="visibleProperties">0</div>
+          <div class="label">Visible</div>
+        </div>
+      </div>
+
+      <div id="geocodeStatus" class="geocode-status" style="display:none;"></div>
+
+      <div style="margin-bottom: 15px;">
+        <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+        <button class="btn" onclick="location.href='/static/PropertyInfo.html'">← Back to Properties</button>
+        <button class="btn" onclick="fitAllMarkers()">🎯 Fit All</button>
+        <button class="btn" onclick="geocodeProperties()">📍 Geocode</button>
+      </div>
+
+      <div class="filter-section">
+        <label>Filter by Manager:</label>
+        <select id="filterManager" onchange="applyFilters()">
+          <option value="">All Managers</option>
+        </select>
+      </div>
+
+      <div class="filter-section">
+        <label>Filter by Trigger Type:</label>
+        <select id="filterTrigger" onchange="applyFilters()">
+          <option value="">All Triggers</option>
+          <option value="zero_tolerance">Zero Tolerance</option>
+          <option value="half_inch">0.5" Trigger</option>
+          <option value="one_inch">1" Trigger</option>
+          <option value="two_inch">2" Trigger</option>
+        </select>
+      </div>
+
+      <div class="filter-section">
+        <label>Filter by Service:</label>
+        <select id="filterService" onchange="applyFilters()">
+          <option value="">All Services</option>
+          <option value="plow">Plow Only</option>
+          <option value="salt">Salt Only</option>
+          <option value="both">Both Services</option>
+        </select>
+      </div>
+
+      <div class="legend">
+        <strong>Legend:</strong>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #ff4444;"></div>
+          <span>Zero Tolerance (0")</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #ff8844;"></div>
+          <span>0.5" Trigger</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #ffcc44;"></div>
+          <span>1" Trigger</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #44ff44;"></div>
+          <span>2" Trigger</span>
+        </div>
+        <div class="legend-item">
+          <div class="legend-color" style="background-color: #667eea;"></div>
+          <span>Custom Trigger</span>
+        </div>
+      </div>
+    </div>
+
+    <div id="loadingOverlay" class="loading-overlay">
+      <div>Loading map...</div>
+    </div>
+  </div>
+
+  <script>
+    let map;
+    let allProperties = [];
+    let markers = [];
+    let currentFilters = {
+      manager: '',
+      trigger: '',
+      service: ''
+    };
+
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager', 'Subcontractor', 'User']);
+      await initializeMap();
+      await fetchProperties();
+      setupEventDelegation();
+    }
+
+    function setupEventDelegation() {
+      // Handle re-geocode button clicks via event delegation
+      document.addEventListener('click', function(e) {
+        if (e.target && e.target.classList.contains('regeocode-btn')) {
+          const propertyId = parseInt(e.target.getAttribute('data-property-id'));
+          if (propertyId) {
+            reGeocodeProperty(propertyId);
+          }
+        }
+      });
+    }
+
+    async function initializeMap() {
+      // Fetch Mapbox token from API Settings
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/settings/api-keys/mapbox_token`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        if (!data.key_value || data.key_value === '') {
+          document.getElementById('loadingOverlay').innerHTML = `
+            <div style="text-align: center; padding: 40px;">
+              <div style="font-size: 48px; margin-bottom: 20px;">🗺️</div>
+              <div style="color: #ff8080; margin-bottom: 10px;">⚠️ Mapbox Token Not Configured</div>
+              <div style="color: #888; font-size: 12px; margin-bottom: 20px;">
+                Add your Mapbox access token in API Settings to enable the interactive map.
+              </div>
+              <a href="/static/APISettings.html" class="btn" style="display: inline-block; text-decoration: none;">
+                🔧 Go to API Settings
+              </a>
+              <br><br>
+              <a href="https://account.mapbox.com/access-tokens/" target="_blank" style="color: #667eea; font-size: 11px; text-decoration: underline;">
+                Don't have a token? Get one free from Mapbox →
+              </a>
+            </div>
+          `;
+          return;
+        }
+
+        // Set Mapbox access token
+        mapboxgl.accessToken = data.key_value;
+
+        // Initialize map
+        map = new mapboxgl.Map({
+          container: 'map',
+          style: 'mapbox://styles/mapbox/dark-v11',
+          center: [-98.5795, 39.8283], // Center of USA
+          zoom: 4
+        });
+
+        map.addControl(new mapboxgl.NavigationControl());
+        map.addControl(new mapboxgl.FullscreenControl());
+
+        map.on('load', () => {
+          document.getElementById('loadingOverlay').classList.add('hidden');
+        });
+      } catch (err) {
+        console.error('Error loading Mapbox token:', err);
+        document.getElementById('loadingOverlay').innerHTML = `
+          <div style="text-align: center; padding: 40px; color: #ff8080;">
+            <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+            <div style="margin-bottom: 10px;">Failed to load map configuration</div>
+            <div style="color: #888; font-size: 12px;">${err.message}</div>
+            <br>
+            <button class="btn" onclick="location.reload()">🔄 Retry</button>
+          </div>
+        `;
+      }
+    }
+
+    async function fetchProperties() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/properties/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        allProperties = await response.json();
+        populateFilters();
+        renderMarkers(allProperties);
+        updateStats();
+      } catch (err) {
+        console.error("Error fetching properties:", err);
+        alert("Failed to load properties.");
+      }
+    }
+
+    function populateFilters() {
+      const managers = [...new Set(allProperties.map(p => p.area_manager))].sort();
+      const filterManager = document.getElementById('filterManager');
+      filterManager.innerHTML = '<option value="">All Managers</option>';
+
+      managers.forEach(manager => {
+        const option = document.createElement('option');
+        option.value = manager;
+        option.textContent = manager;
+        filterManager.appendChild(option);
+      });
+    }
+
+    function renderMarkers(properties) {
+      // Clear existing markers
+      markers.forEach(marker => marker.remove());
+      markers = [];
+
+      let propertiesWithCoords = 0;
+
+      properties.forEach(prop => {
+        // Skip if no coordinates
+        if (!prop.latitude || !prop.longitude) {
+          return;
+        }
+
+        propertiesWithCoords++;
+
+        // Determine marker color based on trigger type
+        const color = getTriggerColor(prop.trigger_type);
+
+        // Create marker
+        const el = document.createElement('div');
+        el.className = 'marker';
+        el.style.width = '30px';
+        el.style.height = '30px';
+        el.style.borderRadius = '50%';
+        el.style.backgroundColor = color;
+        el.style.border = '3px solid rgba(255,255,255,0.5)';
+        el.style.cursor = 'pointer';
+        el.style.boxShadow = '0 0 10px rgba(0,0,0,0.5)';
+
+        // Create popup with navigation buttons
+        const popup = new mapboxgl.Popup({ offset: 25 }).setHTML(`
+          <div class="popup-content">
+            <h3>${prop.name}</h3>
+            <div class="detail"><strong>Address:</strong> ${prop.address}</div>
+            <div class="detail"><strong>Manager:</strong> ${prop.area_manager}</div>
+            <div class="detail"><strong>Square Feet:</strong> ${prop.sqft.toLocaleString()}</div>
+            <div class="detail"><strong>Services:</strong> ${getServices(prop)}</div>
+            <div class="detail"><strong>Trigger:</strong> ${getTriggerLabel(prop)}</div>
+            <div class="detail"><strong>Tier:</strong> ${prop.contract_tier || 'Standard'}</div>
+            ${prop.open_by_time ? `<div class="detail"><strong>Open By:</strong> ${prop.open_by_time}</div>` : ''}
+            <div class="detail"><strong>Location:</strong> ${prop.latitude.toFixed(4)}, ${prop.longitude.toFixed(4)}</div>
+            <div style="margin-top: 10px; display: flex; gap: 5px;">
+              <button class="btn regeocode-btn" data-property-id="${prop.id}" style="padding: 5px 10px; font-size: 11px; flex: 1;">🔄 Re-Geocode</button>
+              <a href="https://www.google.com/maps/dir/?api=1&destination=${encodeURIComponent(prop.address)}" target="_blank" class="btn" style="padding: 5px 10px; font-size: 11px; text-decoration: none; flex: 1;">📍 Navigate</a>
+            </div>
+          </div>
+        `);
+
+        // Add marker to map
+        const marker = new mapboxgl.Marker(el)
+          .setLngLat([prop.longitude, prop.latitude])
+          .setPopup(popup)
+          .addTo(map);
+
+        markers.push(marker);
+      });
+
+      // Show geocoding status if some properties missing coords
+      const missingCoords = properties.length - propertiesWithCoords;
+      if (missingCoords > 0) {
+        const statusDiv = document.getElementById('geocodeStatus');
+        statusDiv.style.display = 'block';
+        statusDiv.innerHTML = `⚠️ ${missingCoords} properties need geocoding. Click "Geocode" to add coordinates.`;
+      } else {
+        document.getElementById('geocodeStatus').style.display = 'none';
+      }
+
+      // Fit map to show all markers
+      if (markers.length > 0) {
+        fitAllMarkers();
+      }
+    }
+
+    function getTriggerColor(triggerType) {
+      switch (triggerType) {
+        case 'zero_tolerance': return '#ff4444';
+        case 'half_inch': return '#ff8844';
+        case 'one_inch': return '#ffcc44';
+        case 'two_inch': return '#44ff44';
+        case 'custom': return '#667eea';
+        default: return '#44ff44';
+      }
+    }
+
+    function getTriggerLabel(prop) {
+      switch (prop.trigger_type) {
+        case 'zero_tolerance': return 'Zero Tolerance (0")';
+        case 'half_inch': return '0.5" Trigger';
+        case 'one_inch': return '1" Trigger';
+        case 'two_inch': return '2" Trigger';
+        case 'custom': return `Custom (${prop.trigger_amount}")`;
+        default: return '2" Trigger';
+      }
+    }
+
+    function getServices(prop) {
+      if (prop.plow && prop.salt) return 'Plow + Salt';
+      if (prop.plow) return 'Plow';
+      if (prop.salt) return 'Salt';
+      return 'None';
+    }
+
+    function applyFilters() {
+      currentFilters.manager = document.getElementById('filterManager').value;
+      currentFilters.trigger = document.getElementById('filterTrigger').value;
+      currentFilters.service = document.getElementById('filterService').value;
+
+      let filtered = allProperties;
+
+      if (currentFilters.manager) {
+        filtered = filtered.filter(p => p.area_manager === currentFilters.manager);
+      }
+
+      if (currentFilters.trigger) {
+        filtered = filtered.filter(p => p.trigger_type === currentFilters.trigger);
+      }
+
+      if (currentFilters.service === 'plow') {
+        filtered = filtered.filter(p => p.plow && !p.salt);
+      } else if (currentFilters.service === 'salt') {
+        filtered = filtered.filter(p => p.salt && !p.plow);
+      } else if (currentFilters.service === 'both') {
+        filtered = filtered.filter(p => p.plow && p.salt);
+      }
+
+      renderMarkers(filtered);
+      updateStats(filtered);
+    }
+
+    function updateStats(properties = allProperties) {
+      document.getElementById('totalProperties').textContent = allProperties.length;
+      document.getElementById('visibleProperties').textContent = markers.length;
+    }
+
+    function fitAllMarkers() {
+      if (markers.length === 0) return;
+
+      const bounds = new mapboxgl.LngLatBounds();
+      markers.forEach(marker => {
+        bounds.extend(marker.getLngLat());
+      });
+
+      map.fitBounds(bounds, { padding: 100 });
+    }
+
+    async function geocodeProperties() {
+      const propertiesNeedingGeocode = allProperties.filter(p => !p.latitude || !p.longitude);
+
+      if (propertiesNeedingGeocode.length === 0) {
+        alert('All properties already have coordinates!');
+        return;
+      }
+
+      if (!confirm(`Geocode ${propertiesNeedingGeocode.length} properties? This uses free Nominatim geocoding (please use responsibly - max 1 request/second).`)) {
+        return;
+      }
+
+      const statusDiv = document.getElementById('geocodeStatus');
+      statusDiv.style.display = 'block';
+      statusDiv.innerHTML = 'Geocoding properties... 0%';
+
+      const token = localStorage.getItem("token");
+      let completed = 0;
+
+      for (const prop of propertiesNeedingGeocode) {
+        try {
+          let lat = null;
+          let lng = null;
+
+          // Extract ZIP code and state from address
+          const zipMatch = prop.address.match(/\b(\d{5})\b/);
+          // Match state: either 2-letter code (OH, NY) or full name
+          const stateMatch = prop.address.match(/\b([A-Z]{2})\b\s*\d{5}/) ||
+                            prop.address.match(/,\s*([A-Za-z\s]+)\s+\d{5}/);
+
+          if (zipMatch) {
+            const zip = zipMatch[1];
+            const state = stateMatch ? stateMatch[1].trim() : '';
+
+            // Build geocode query: ZIP + State (if found) + USA, with country filter
+            const query = state ? `${zip}, ${state}, USA` : `${zip}, USA`;
+            const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us`;
+
+            const response = await fetch(geocodeUrl, {
+              headers: {
+                'User-Agent': 'Snow Contractor Portal (contact: admin@example.com)'
+              }
+            });
+            const data = await response.json();
+
+            if (data && data.length > 0) {
+              lat = parseFloat(data[0].lat);
+              lng = parseFloat(data[0].lon);
+            }
+          }
+
+          if (lat && lng) {
+            // Update property in database
+            await fetch(`${API_BASE_URL}/update-property-coordinates/`, {
+              method: "POST",
+              headers: {
+                "Authorization": `Bearer ${token}`,
+                "Content-Type": "application/json"
+              },
+              body: JSON.stringify({
+                property_id: prop.id,
+                latitude: lat,
+                longitude: lng
+              })
+            });
+
+            prop.latitude = lat;
+            prop.longitude = lng;
+          }
+
+          completed++;
+          const percent = Math.round((completed / propertiesNeedingGeocode.length) * 100);
+          statusDiv.innerHTML = `Geocoding properties... ${percent}%`;
+
+          // Respect Nominatim rate limit: 1 request per second
+          await new Promise(resolve => setTimeout(resolve, 1100));
+
+        } catch (err) {
+          console.error(`Failed to geocode ${prop.name}:`, err);
+        }
+      }
+
+      statusDiv.innerHTML = `✅ Geocoded ${completed} properties!`;
+      setTimeout(() => {
+        statusDiv.style.display = 'none';
+      }, 3000);
+
+      // Refresh map
+      renderMarkers(allProperties);
+    }
+
+    async function reGeocodeProperty(propertyId) {
+      const prop = allProperties.find(p => p.id === propertyId);
+      if (!prop) {
+        alert('Property not found');
+        return;
+      }
+
+      if (!confirm(`Re-geocode "${prop.name}"?\n\nAddress: ${prop.address}\n\nThis will update the coordinates using ZIP code geocoding.`)) {
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+
+      try {
+        // Extract ZIP code and state from address
+        const zipMatch = prop.address.match(/\b(\d{5})\b/);
+        const stateMatch = prop.address.match(/\b([A-Z]{2})\b\s*\d{5}/) ||
+                          prop.address.match(/,\s*([A-Za-z\s]+)\s+\d{5}/);
+
+        if (!zipMatch) {
+          alert('Could not extract ZIP code from address. Please ensure the address contains a valid 5-digit ZIP code.');
+          return;
+        }
+
+        const zip = zipMatch[1];
+        const state = stateMatch ? stateMatch[1].trim() : '';
+
+        // Build geocode query
+        const query = state ? `${zip}, ${state}, USA` : `${zip}, USA`;
+        const geocodeUrl = `https://nominatim.openstreetmap.org/search?format=json&q=${encodeURIComponent(query)}&countrycodes=us`;
+
+        const response = await fetch(geocodeUrl, {
+          headers: {
+            'User-Agent': 'Snow Contractor Portal (contact: admin@example.com)'
+          }
+        });
+        const data = await response.json();
+
+        if (!data || data.length === 0) {
+          alert(`Failed to geocode ZIP ${zip}. No results found.`);
+          return;
+        }
+
+        const lat = parseFloat(data[0].lat);
+        const lng = parseFloat(data[0].lon);
+
+        // Update property in database
+        await fetch(`${API_BASE_URL}/update-property-coordinates/`, {
+          method: "POST",
+          headers: {
+            "Authorization": `Bearer ${token}`,
+            "Content-Type": "application/json"
+          },
+          body: JSON.stringify({
+            property_id: prop.id,
+            latitude: lat,
+            longitude: lng
+          })
+        });
+
+        // Update local property
+        prop.latitude = lat;
+        prop.longitude = lng;
+
+        alert(`✅ Successfully re-geocoded "${prop.name}"\n\nNew location: ${lat.toFixed(4)}, ${lng.toFixed(4)}`);
+
+        // Refresh map
+        renderMarkers(allProperties);
+      } catch (err) {
+        console.error('Error re-geocoding property:', err);
+        alert(`Failed to re-geocode property: ${err.message}`);
+      }
+    }
+  </script>
+    <script src="/static/ai-chat-widget.js"></script>
+</body>
+</html>

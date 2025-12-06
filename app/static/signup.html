@@ -138,26 +138,49 @@
 
     <script>
         document.getElementById('signupForm').addEventListener('submit', async function(event) {
-    event.preventDefault();
+            event.preventDefault();
 
-    const form = document.getElementById('signupForm');
-    const formData = new FormData(form);
+            const messageEl = document.getElementById('signupMessage');
+            messageEl.innerText = '⏳ Submitting...';
+            messageEl.style.color = '#ffaa00';
 
-    const response = await fetch(`${API_BASE_URL}/signup-request/`, {
-        method: 'POST',
-        body: formData
-    });
+            const form = document.getElementById('signupForm');
+            const formData = new FormData(form);
 
-    const result = await response.json();
-    const messageEl = document.getElementById('signupMessage');
+            // Log what we're sending
+            console.log('Submitting signup to:', `${API_BASE_URL}/signup-request/`);
+            console.log('Form data:');
+            for (let pair of formData.entries()) {
+                console.log(pair[0] + ': ' + pair[1]);
+            }
 
-    if (response.ok) {
-        messageEl.innerText = '✅ Signup request submitted!';
-    } else {
-        messageEl.innerText = `❌ ${result.detail || 'Signup failed'}`;
-    }
-});
+            try {
+                const response = await fetch(`${API_BASE_URL}/signup-request/`, {
+                    method: 'POST',
+                    body: formData
+                });
 
+                console.log('Response status:', response.status);
+                console.log('Response ok:', response.ok);
+
+                const result = await response.json();
+                console.log('Result:', result);
+
+                if (response.ok) {
+                    messageEl.style.color = '#00ff00';
+                    messageEl.innerText = '✅ Signup request submitted! You will receive an email when approved.';
+                    // Clear the form
+                    form.reset();
+                } else {
+                    messageEl.style.color = '#ff4444';
+                    messageEl.innerText = `❌ ${result.detail || 'Signup failed'}`;
+                }
+            } catch (error) {
+                console.error('Signup error:', error);
+                messageEl.style.color = '#ff4444';
+                messageEl.innerText = `❌ Error: ${error.message}`;
+            }
+        });
     </script>
 </body>
 </html>

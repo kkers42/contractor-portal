@@ -1,0 +1,852 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Manage Property Lists</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script src="/static/config.js"></script>
+  <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <link rel="stylesheet" href="/static/modern-theme.css">
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 10px;
+    }
+    .action-bar {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      justify-content: flex-start;
+    }
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+    .btn-danger {
+      color: #ff8080;
+      border-color: #ff8080;
+    }
+    .btn-danger:hover {
+      background-color: #3a2a2a;
+    }
+    .lists-container {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+    .list-card {
+      background-color: #0a0a0a;
+      border: 1px solid #80ff80;
+      border-radius: 8px;
+      padding: 15px;
+      cursor: pointer;
+      transition: all 0.2s;
+    }
+    .list-card:hover {
+      background-color: #1a1a1a;
+      border-color: #a0ffa0;
+      transform: translateY(-2px);
+    }
+    .list-card h3 {
+      margin: 0 0 10px 0;
+      color: #80ff80;
+    }
+    .list-card .list-meta {
+      font-size: 12px;
+      color: #888;
+      margin-bottom: 10px;
+    }
+    .list-card .list-actions {
+      display: flex;
+      gap: 10px;
+      margin-top: 10px;
+    }
+    .list-card .list-actions button {
+      padding: 5px 10px;
+      font-size: 12px;
+    }
+    .list-card.shared {
+      border-color: #667eea;
+    }
+    .list-card.shared h3 {
+      color: #667eea;
+    }
+
+    /* Modal styles */
+    .modal {
+      display: none;
+      position: fixed;
+      z-index: 1000;
+      left: 0;
+      top: 0;
+      width: 100%;
+      height: 100%;
+      background-color: rgba(0,0,0,0.8);
+    }
+    .modal-content {
+      background-color: #1a1a1a;
+      margin: 5% auto;
+      padding: 20px;
+      border: 2px solid #80ff80;
+      width: 80%;
+      max-width: 800px;
+      color: #80ff80;
+      max-height: 80vh;
+      overflow-y: auto;
+    }
+    .close {
+      color: #ff8080;
+      float: right;
+      font-size: 28px;
+      font-weight: bold;
+      cursor: pointer;
+    }
+    .close:hover {
+      color: #ff4040;
+    }
+    .form-group {
+      margin-bottom: 15px;
+    }
+    .form-group label {
+      display: block;
+      margin-bottom: 5px;
+    }
+    .form-group input[type="text"], .form-group select {
+      width: 100%;
+      padding: 8px;
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      font-family: 'Courier New', monospace;
+    }
+    .form-group input[type="checkbox"] {
+      width: auto;
+    }
+    .property-selector {
+      max-height: 300px;
+      overflow-y: auto;
+      border: 1px solid #80ff80;
+      padding: 10px;
+      background-color: #0a0a0a;
+    }
+    .property-item {
+      padding: 8px;
+      margin: 5px 0;
+      background-color: #1a1a1a;
+      border: 1px solid #333;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+    .property-item:hover {
+      background-color: #2a2a2a;
+    }
+    .property-item.selected {
+      border-color: #80ff80;
+      background-color: #003300;
+    }
+  </style>
+</head>
+<body onload="initializePage()">
+  <h2>Property Lists</h2>
+
+  <div class="action-bar">
+    <button class="btn" onclick="openCreateModal()">+ Create New List</button>
+    <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+    <button class="btn" onclick="location.href='/static/PropertyInfo.html'">← Back to Properties</button>
+  </div>
+
+  <div style="margin: 20px 0;">
+    <input type="text" id="filterInput" placeholder="🔍 Filter lists by name..."
+           style="width: 100%; max-width: 500px; padding: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+           oninput="filterLists()">
+  </div>
+
+  <div class="lists-container" id="listsContainer"></div>
+
+  <!-- Create/Edit List Modal -->
+  <div id="listModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal()">&times;</span>
+      <h3 id="modalTitle">Create Property List</h3>
+      <form id="listForm">
+        <input type="hidden" id="listId">
+
+        <div class="form-group">
+          <label>List Name:</label>
+          <input type="text" id="listName" required>
+        </div>
+
+        <div class="form-group">
+          <label>
+            <input type="checkbox" id="listShared"> Share with all users
+          </label>
+        </div>
+
+        <div class="form-group" id="createListPropertySelector" style="display: none;">
+          <label>Select Properties for List:</label>
+          <input type="text" id="createListFilterInput" placeholder="🔍 Filter properties by name, address, or manager..."
+                 style="width: 100%; padding: 8px; margin-bottom: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+                 oninput="filterCreateListProperties()">
+          <div class="property-selector" id="createPropertyList" style="max-height: 300px; overflow-y: auto; border: 1px solid #80ff80; padding: 10px; background-color: #0a0a0a;"></div>
+        </div>
+
+        <div class="form-group">
+          <button type="submit" class="btn">Save List</button>
+          <button type="button" class="btn" onclick="closeModal()">Cancel</button>
+        </div>
+      </form>
+    </div>
+  </div>
+
+  <!-- View List Details Modal -->
+  <div id="viewListModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeViewModal()">&times;</span>
+      <h3 id="viewListName">List Name</h3>
+      <div id="viewListMeta" class="list-meta"></div>
+
+      <div class="action-bar">
+        <button class="btn" onclick="openAddPropertyModal()">+ Add Properties</button>
+      </div>
+
+      <div style="margin: 15px 0;">
+        <input type="text" id="viewListFilterInput" placeholder="🔍 Filter properties by name, address, or manager..."
+               style="width: 100%; padding: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+               oninput="filterViewListProperties()">
+      </div>
+
+      <div id="listPropertiesContainer"></div>
+    </div>
+  </div>
+
+  <!-- Add Property to List Modal -->
+  <div id="addPropertyModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeAddPropertyModal()">&times;</span>
+      <h3>Add Properties to List</h3>
+
+      <div style="margin: 15px 0;">
+        <input type="text" id="addPropertyFilterInput" placeholder="🔍 Filter properties by name, address, or manager..."
+               style="width: 100%; padding: 10px; background-color: #0a0a0a; color: #80ff80; border: 1px solid #80ff80; font-family: 'Courier New', monospace;"
+               oninput="filterAddProperties()">
+      </div>
+
+      <div class="property-selector" id="propertySelector"></div>
+
+      <div class="action-bar">
+        <button class="btn" onclick="addSelectedProperties()">Add Selected</button>
+        <button class="btn" onclick="closeAddPropertyModal()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    let allLists = [];
+    let currentList = null;
+    let allProperties = [];
+    let selectedProperties = new Set();
+
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager', 'Subcontractor', 'User']);
+      await fetchLists();
+      await fetchAllProperties();
+    }
+
+    async function fetchLists() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/property-lists/`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        allLists = await response.json();
+        renderLists();
+      } catch (err) {
+        console.error("Error fetching lists:", err);
+        alert("Failed to load property lists.");
+      }
+    }
+
+    async function fetchAllProperties() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/properties/`, {
+          method: "GET",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        allProperties = await response.json();
+      } catch (err) {
+        console.error("Error fetching properties:", err);
+      }
+    }
+
+    function renderLists() {
+      const container = document.getElementById("listsContainer");
+      container.innerHTML = "";
+
+      if (allLists.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No property lists yet. Create one to get started!</p>';
+        return;
+      }
+
+      allLists.forEach(list => {
+        const card = document.createElement("div");
+        card.className = `list-card ${list.is_shared ? 'shared' : ''}`;
+        card.onclick = () => viewList(list.id);
+
+        const sharedBadge = list.is_shared ? ' 🌐' : '';
+
+        card.innerHTML = `
+          <h3>${list.name}${sharedBadge}</h3>
+          <div class="list-meta">
+            ${list.property_count} properties • Owner: ${list.owner_name}<br>
+            Created: ${new Date(list.created_at).toLocaleDateString()}
+          </div>
+          <div class="list-actions" onclick="event.stopPropagation()">
+            <button class="btn" onclick="editList(${list.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteList(${list.id}, '${list.name.replace(/'/g, "\\'")}')">Delete</button>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function filterLists() {
+      const filterText = document.getElementById('filterInput').value.toLowerCase();
+      const container = document.getElementById("listsContainer");
+      container.innerHTML = "";
+
+      const filteredLists = allLists.filter(list => {
+        return list.name.toLowerCase().includes(filterText) ||
+               list.owner_name.toLowerCase().includes(filterText);
+      });
+
+      if (filteredLists.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No lists match your filter.</p>';
+        return;
+      }
+
+      filteredLists.forEach(list => {
+        const card = document.createElement("div");
+        card.className = `list-card ${list.is_shared ? 'shared' : ''}`;
+        card.onclick = () => viewList(list.id);
+
+        const sharedBadge = list.is_shared ? ' 🌐' : '';
+
+        card.innerHTML = `
+          <h3>${list.name}${sharedBadge}</h3>
+          <div class="list-meta">
+            ${list.property_count} properties • Owner: ${list.owner_name}<br>
+            Created: ${new Date(list.created_at).toLocaleDateString()}
+          </div>
+          <div class="list-actions" onclick="event.stopPropagation()">
+            <button class="btn" onclick="editList(${list.id})">Edit</button>
+            <button class="btn btn-danger" onclick="deleteList(${list.id}, '${list.name.replace(/'/g, "\\'")}')">Delete</button>
+          </div>
+        `;
+
+        container.appendChild(card);
+      });
+    }
+
+    function openCreateModal() {
+      document.getElementById('modalTitle').textContent = 'Create Property List';
+      document.getElementById('listForm').reset();
+      document.getElementById('listId').value = '';
+      document.getElementById('createListPropertySelector').style.display = 'block';
+      renderCreatePropertySelector();
+      document.getElementById('listModal').style.display = 'block';
+    }
+
+    function renderCreatePropertySelector() {
+      const container = document.getElementById('createPropertyList');
+      container.innerHTML = '';
+
+      if (allProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties available.</p>';
+        return;
+      }
+
+      allProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.style.marginBottom = '8px';
+
+        item.innerHTML = `
+          <label style="cursor: pointer; display: flex; align-items: center;">
+            <input type="checkbox" class="create-list-property-checkbox" value="${prop.id}" style="margin-right: 10px;">
+            <div>
+              <strong>${prop.name}</strong><br>
+              <small style="color: #888;">${prop.address} • ${prop.area_manager}</small>
+            </div>
+          </label>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function filterCreateListProperties() {
+      const filterText = document.getElementById('createListFilterInput').value.toLowerCase();
+      const container = document.getElementById('createPropertyList');
+      container.innerHTML = '';
+
+      const filteredProperties = allProperties.filter(prop => {
+        return prop.name.toLowerCase().includes(filterText) ||
+               prop.address.toLowerCase().includes(filterText) ||
+               prop.area_manager.toLowerCase().includes(filterText);
+      });
+
+      if (filteredProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties match your filter.</p>';
+        return;
+      }
+
+      filteredProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.style.marginBottom = '8px';
+
+        // Check if this property was previously selected
+        const wasChecked = document.querySelector(`.create-list-property-checkbox[value="${prop.id}"]`)?.checked || false;
+
+        item.innerHTML = `
+          <label style="cursor: pointer; display: flex; align-items: center;">
+            <input type="checkbox" class="create-list-property-checkbox" value="${prop.id}" ${wasChecked ? 'checked' : ''} style="margin-right: 10px;">
+            <div>
+              <strong>${prop.name}</strong><br>
+              <small style="color: #888;">${prop.address} • ${prop.area_manager}</small>
+            </div>
+          </label>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function editList(listId) {
+      const list = allLists.find(l => l.id === listId);
+      if (!list) return;
+
+      document.getElementById('modalTitle').textContent = 'Edit Property List';
+      document.getElementById('listId').value = list.id;
+      document.getElementById('listName').value = list.name;
+      document.getElementById('listShared').checked = list.is_shared;
+      document.getElementById('createListPropertySelector').style.display = 'none';
+      document.getElementById('listModal').style.display = 'block';
+    }
+
+    async function viewList(listId) {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/property-lists/${listId}`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        currentList = await response.json();
+
+        document.getElementById('viewListName').textContent = currentList.name;
+        document.getElementById('viewListMeta').innerHTML = `
+          Owner: ${currentList.owner_name} •
+          ${currentList.properties.length} properties •
+          ${currentList.is_shared ? '🌐 Shared' : 'Private'}
+        `;
+
+        renderListProperties();
+        document.getElementById('viewListModal').style.display = 'block';
+      } catch (err) {
+        console.error("Error fetching list:", err);
+        alert("Failed to load list details.");
+      }
+    }
+
+    function renderListProperties() {
+      const container = document.getElementById('listPropertiesContainer');
+      container.innerHTML = '';
+
+      if (currentList.properties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties in this list yet.</p>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.style.marginTop = '20px';
+
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Name</th>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Address</th>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Manager</th>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+
+      const tbody = table.querySelector('tbody');
+
+      currentList.properties.forEach(prop => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="border: 1px solid #80ff80; padding: 8px;">${prop.name}</td>
+          <td style="border: 1px solid #80ff80; padding: 8px;">${prop.address}</td>
+          <td style="border: 1px solid #80ff80; padding: 8px;">${prop.area_manager}</td>
+          <td style="border: 1px solid #80ff80; padding: 8px;">
+            <button class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="removePropertyFromList(${currentList.id}, ${prop.id})">Remove</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      container.appendChild(table);
+    }
+
+    function filterViewListProperties() {
+      const filterText = document.getElementById('viewListFilterInput').value.toLowerCase();
+      const container = document.getElementById('listPropertiesContainer');
+      container.innerHTML = '';
+
+      const filteredProperties = currentList.properties.filter(prop => {
+        return prop.name.toLowerCase().includes(filterText) ||
+               prop.address.toLowerCase().includes(filterText) ||
+               prop.area_manager.toLowerCase().includes(filterText);
+      });
+
+      if (filteredProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties match your filter.</p>';
+        return;
+      }
+
+      const table = document.createElement('table');
+      table.style.width = '100%';
+      table.style.borderCollapse = 'collapse';
+      table.style.marginTop = '20px';
+
+      table.innerHTML = `
+        <thead>
+          <tr>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Name</th>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Address</th>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Manager</th>
+            <th style="border: 1px solid #80ff80; padding: 8px;">Actions</th>
+          </tr>
+        </thead>
+        <tbody></tbody>
+      `;
+
+      const tbody = table.querySelector('tbody');
+
+      filteredProperties.forEach(prop => {
+        const row = document.createElement('tr');
+        row.innerHTML = `
+          <td style="border: 1px solid #80ff80; padding: 8px;">${prop.name}</td>
+          <td style="border: 1px solid #80ff80; padding: 8px;">${prop.address}</td>
+          <td style="border: 1px solid #80ff80; padding: 8px;">${prop.area_manager}</td>
+          <td style="border: 1px solid #80ff80; padding: 8px;">
+            <button class="btn btn-danger" style="padding: 5px 10px; font-size: 12px;" onclick="removePropertyFromList(${currentList.id}, ${prop.id})">Remove</button>
+          </td>
+        `;
+        tbody.appendChild(row);
+      });
+
+      container.appendChild(table);
+    }
+
+    function openAddPropertyModal() {
+      selectedProperties.clear();
+      renderPropertySelector();
+      document.getElementById('addPropertyModal').style.display = 'block';
+    }
+
+    function renderPropertySelector() {
+      const container = document.getElementById('propertySelector');
+      container.innerHTML = '';
+
+      // Filter out properties already in the list
+      const listPropertyIds = new Set(currentList.properties.map(p => p.id));
+      const availableProperties = allProperties.filter(p => !listPropertyIds.has(p.id));
+
+      if (availableProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">All properties are already in this list.</p>';
+        return;
+      }
+
+      availableProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = 'property-item';
+        item.onclick = () => togglePropertySelection(prop.id, item);
+
+        item.innerHTML = `
+          <div>
+            <strong>${prop.name}</strong><br>
+            <small>${prop.address} • ${prop.area_manager}</small>
+          </div>
+          <span id="check-${prop.id}">☐</span>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function filterAddProperties() {
+      const filterText = document.getElementById('addPropertyFilterInput').value.toLowerCase();
+      const container = document.getElementById('propertySelector');
+      container.innerHTML = '';
+
+      // Filter out properties already in the list
+      const listPropertyIds = new Set(currentList.properties.map(p => p.id));
+      const availableProperties = allProperties.filter(p => !listPropertyIds.has(p.id));
+
+      // Apply text filter
+      const filteredProperties = availableProperties.filter(prop => {
+        return prop.name.toLowerCase().includes(filterText) ||
+               prop.address.toLowerCase().includes(filterText) ||
+               prop.area_manager.toLowerCase().includes(filterText);
+      });
+
+      if (filteredProperties.length === 0) {
+        container.innerHTML = '<p style="text-align: center; color: #888;">No properties match your filter.</p>';
+        return;
+      }
+
+      filteredProperties.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = 'property-item';
+        // Preserve selection state
+        if (selectedProperties.has(prop.id)) {
+          item.classList.add('selected');
+        }
+        item.onclick = () => togglePropertySelection(prop.id, item);
+
+        item.innerHTML = `
+          <div>
+            <strong>${prop.name}</strong><br>
+            <small>${prop.address} • ${prop.area_manager}</small>
+          </div>
+          <span id="check-${prop.id}">${selectedProperties.has(prop.id) ? '☑' : '☐'}</span>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function togglePropertySelection(propId, element) {
+      if (selectedProperties.has(propId)) {
+        selectedProperties.delete(propId);
+        element.classList.remove('selected');
+        document.getElementById(`check-${propId}`).textContent = '☐';
+      } else {
+        selectedProperties.add(propId);
+        element.classList.add('selected');
+        document.getElementById(`check-${propId}`).textContent = '☑';
+      }
+    }
+
+    async function addSelectedProperties() {
+      if (selectedProperties.size === 0) {
+        alert('Please select at least one property.');
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+
+      for (const propId of selectedProperties) {
+        try {
+          await fetch(`${API_BASE_URL}/property-lists/add-property/`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({
+              list_id: currentList.id,
+              property_id: propId
+            })
+          });
+        } catch (err) {
+          console.error("Error adding property:", err);
+        }
+      }
+
+      alert(`Added ${selectedProperties.size} properties to list.`);
+      closeAddPropertyModal();
+      viewList(currentList.id); // Refresh the list view
+    }
+
+    async function removePropertyFromList(listId, propId) {
+      if (!confirm('Remove this property from the list?')) return;
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/property-lists/${listId}/properties/${propId}`, {
+          method: "DELETE",
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        const result = await response.json();
+        alert(result.message);
+        viewList(listId); // Refresh the list view
+      } catch (err) {
+        console.error("Error removing property:", err);
+        alert("Failed to remove property from list.");
+      }
+    }
+
+    function closeModal() {
+      document.getElementById('listModal').style.display = 'none';
+    }
+
+    function closeViewModal() {
+      document.getElementById('viewListModal').style.display = 'none';
+      currentList = null;
+    }
+
+    function closeAddPropertyModal() {
+      document.getElementById('addPropertyModal').style.display = 'none';
+      selectedProperties.clear();
+    }
+
+    // Close modals when clicking outside
+    window.onclick = function(event) {
+      const listModal = document.getElementById('listModal');
+      const viewListModal = document.getElementById('viewListModal');
+      const addPropertyModal = document.getElementById('addPropertyModal');
+
+      if (event.target == listModal) listModal.style.display = 'none';
+      if (event.target == viewListModal) closeViewModal();
+      if (event.target == addPropertyModal) closeAddPropertyModal();
+    }
+
+    // Handle list form submission
+    document.getElementById('listForm').addEventListener('submit', async function(e) {
+      e.preventDefault();
+
+      const listId = document.getElementById('listId').value;
+      const listData = {
+        name: document.getElementById('listName').value,
+        is_shared: document.getElementById('listShared').checked
+      };
+
+      const token = localStorage.getItem("token");
+
+      try {
+        let response;
+        if (listId) {
+          // Update existing list
+          response = await fetch(`${API_BASE_URL}/property-lists/`, {
+            method: "PUT",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify({ ...listData, id: parseInt(listId) })
+          });
+        } else {
+          // Create new list
+          response = await fetch(`${API_BASE_URL}/property-lists/`, {
+            method: "POST",
+            headers: {
+              "Authorization": `Bearer ${token}`,
+              "Content-Type": "application/json"
+            },
+            body: JSON.stringify(listData)
+          });
+        }
+
+        const result = await response.json();
+
+        if (response.ok) {
+          const savedListId = listId || result.list_id;
+
+          // If creating a new list, add selected properties
+          if (!listId && result.list_id) {
+            const checkboxes = document.querySelectorAll('.create-list-property-checkbox:checked');
+            for (const checkbox of checkboxes) {
+              try {
+                await fetch(`${API_BASE_URL}/property-lists/add-property/`, {
+                  method: "POST",
+                  headers: {
+                    "Authorization": `Bearer ${token}`,
+                    "Content-Type": "application/json"
+                  },
+                  body: JSON.stringify({
+                    list_id: result.list_id,
+                    property_id: parseInt(checkbox.value)
+                  })
+                });
+              } catch (err) {
+                console.error(`Failed to add property ${checkbox.value}:`, err);
+              }
+            }
+          }
+
+          alert(result.message);
+          closeModal();
+          await fetchLists();
+        } else {
+          alert('Error: ' + (result.detail || 'Failed to save list'));
+        }
+      } catch (err) {
+        console.error('Error saving list:', err);
+        alert('Failed to save list. Please try again.');
+      }
+    });
+
+    async function deleteList(listId, listName) {
+      if (!confirm(`Are you sure you want to delete "${listName}"?`)) {
+        return;
+      }
+
+      const token = localStorage.getItem("token");
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/property-lists/${listId}`, {
+          method: "DELETE",
+          headers: {
+            "Authorization": `Bearer ${token}`
+          }
+        });
+
+        const result = await response.json();
+
+        if (response.ok) {
+          alert(result.message);
+          await fetchLists();
+        } else {
+          alert('Error: ' + (result.detail || 'Failed to delete list'));
+        }
+      } catch (err) {
+        console.error('Error deleting list:', err);
+        alert('Failed to delete list. Please try again.');
+      }
+    }
+  </script>
+    <script src="/static/ai-chat-widget.js"></script>
+</body>
+</html>

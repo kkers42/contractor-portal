@@ -70,26 +70,23 @@
           <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
         </div>
 
-        <label for="property">Property *</label>
+        <label for="property">Property</label>
         <select id="property" required></select>
 
-        <label for="time_in">Time In *</label>
-        <input type="datetime-local" id="time_in" required>
-
-        <label for="time_out">Time Out *</label>
-        <input type="datetime-local" id="time_out" required>
-
-        <hr style="border-color: #444; margin: 20px 0;">
-        <p style="text-align: center; color: #666; font-size: 0.9em;">Optional Details</p>
-
         <label for="contractor">Contractor (Manager)</label>
-        <select id="contractor"></select>
+        <select id="contractor" required></select>
 
         <label for="worker">Worker Name (Last, First)</label>
-        <input type="text" id="worker" placeholder="Doe, John">
+        <input type="text" id="worker" placeholder="Doe, John" required>
 
         <label for="service">Equipment</label>
-        <select id="service"></select>
+        <select id="service" required></select>
+
+        <label for="time_in">Time In</label>
+        <input type="datetime-local" id="time_in" required>
+
+        <label for="time_out">Time Out</label>
+        <input type="datetime-local" id="time_out" required>
 
         <label for="bulk_salt_qty">Bulk Salt (Yards)</label>
         <input type="number" id="bulk_salt_qty" min="0" step="0.01" value="0">
@@ -241,13 +238,11 @@
                 document.getElementById('contractor').value = log.contractor_id;
                 document.getElementById('worker').value = log.worker_name || '';
                 document.getElementById('service').value = log.equipment || '';
-
-                // Parse the datetime from database (assumes MySQL returns local time)
-                document.getElementById('time_in').value = parseMySQLDateTime(log.time_in);
+                document.getElementById('time_in').value = formatDateTimeLocal(new Date(log.time_in));
 
                 // Only pre-fill time_out if it exists, otherwise leave it for the user to fill
                 if (log.time_out) {
-                    document.getElementById('time_out').value = parseMySQLDateTime(log.time_out);
+                    document.getElementById('time_out').value = formatDateTimeLocal(new Date(log.time_out));
                 } else {
                     // Set default time_out to current time
                     document.getElementById('time_out').value = formatDateTimeLocal(new Date());
@@ -269,16 +264,6 @@
             }
         }
 
-        function parseMySQLDateTime(mysqlDatetime) {
-            // MySQL returns datetime as "2025-11-30 02:15:00" or "2025-11-30T02:15:00"
-            // We need to convert to datetime-local format "2025-11-30T02:15"
-            if (!mysqlDatetime) return '';
-
-            // Replace space with T if needed, then take first 16 chars
-            const formatted = mysqlDatetime.replace(' ', 'T').substring(0, 16);
-            return formatted;
-        }
-
         function formatDateTimeLocal(date) {
             const year = date.getFullYear();
             const month = String(date.getMonth() + 1).padStart(2, '0');
@@ -288,83 +273,25 @@
             return `${year}-${month}-${day}T${hours}:${minutes}`;
         }
 
-        function formatForMySQL(datetimeLocal) {
-            // Convert "2025-11-30T02:15" to "2025-11-30 02:15:00"
-            if (!datetimeLocal) return null;
-            return datetimeLocal.replace('T', ' ') + ':00';
-        }
-
         async function submitWinterOpsLog() {
             const token = localStorage.getItem('token');
+            const contractorSelect = document.getElementById('contractor');
+            const selectedContractor = contractorSelect.options[contractorSelect.selectedIndex];
 
-            // Get datetime-local values and convert to MySQL format (REQUIRED)
-            const timeInLocal = document.getElementById('time_in').value;
-            const timeOutLocal = document.getElementById('time_out').value;
-
-            if (!timeInLocal || !timeOutLocal) {
-                alert('⚠️ Property, Time In, and Time Out are required!');
-                return;
-            }
-
-            // Get user info from token for defaults
-            const payload = JSON.parse(atob(token.split('.')[1]));
-            const userId = parseInt(payload.sub);
-            const userName = payload.name || 'Unknown';
-
-            // Required fields
             const data = {
                 property_id: parseInt(document.getElementById('property').value),
-                time_in: formatForMySQL(timeInLocal),
-                time_out: formatForMySQL(timeOutLocal)
+                contractor_id: parseInt(contractorSelect.value),
+                contractor_name: selectedContractor.textContent,
+                worker_name: document.getElementById('worker').value,
+                equipment: document.getElementById('service').value,
+                time_in: document.getElementById('time_in').value,
+                time_out: document.getElementById('time_out').value,
+                bulk_salt_qty: parseFloat(document.getElementById('bulk_salt_qty').value),
+                bag_salt_qty: parseFloat(document.getElementById('bag_salt_qty').value),
+                calcium_chloride_qty: parseFloat(document.getElementById('calcium_chloride_qty').value),
+                customer_provided: document.getElementById('customer_provided').value === 'true',
+                notes: document.getElementById('notes').value
             };
-
-            // Optional fields - only include if filled
-            const contractorSelect = document.getElementById('contractor');
-            if (contractorSelect.value) {
-                data.contractor_id = parseInt(contractorSelect.value);
-                const selectedContractor = contractorSelect.options[contractorSelect.selectedIndex];
-                data.contractor_name = selectedContractor.textContent;
-            } else {
-                // Default to current user
-                data.contractor_id = userId;
-                data.contractor_name = userName;
-            }
-
-            const workerName = document.getElementById('worker').value.trim();
-            if (workerName) {
-                data.worker_name = workerName;
-            } else {
-                data.worker_name = userName; // Default to current user
-            }
-
-            const equipment = document.getElementById('service').value;
-            if (equipment) {
-                data.equipment = equipment;
-            }
-
-            const bulkSalt = parseFloat(document.getElementById('bulk_salt_qty').value) || 0;
-            if (bulkSalt > 0) {
-                data.bulk_salt_qty = bulkSalt;
-            }
-
-            const bagSalt = parseFloat(document.getElementById('bag_salt_qty').value) || 0;
-            if (bagSalt > 0) {
-                data.bag_salt_qty = bagSalt;
-            }
-
-            const calciumChloride = parseFloat(document.getElementById('calcium_chloride_qty').value) || 0;
-            if (calciumChloride > 0) {
-                data.calcium_chloride_qty = calciumChloride;
-            }
-
-            data.customer_provided = document.getElementById('customer_provided').value === 'true';
-
-            const notes = document.getElementById('notes').value.trim();
-            if (notes) {
-                data.notes = notes;
-            }
-
-            console.log('Submitting data:', data); // Debug log
 
             try {
                 let response;

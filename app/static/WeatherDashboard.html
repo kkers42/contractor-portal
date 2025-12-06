@@ -1,0 +1,479 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Weather Dashboard</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+  <script src="/static/config.js"></script>
+  <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <link rel="stylesheet" href="/static/modern-theme.css">
+  <style>
+    body {
+      font-family: 'Courier New', monospace;
+      background-color: #1a1a1a;
+      color: #80ff80;
+      padding: 20px;
+    }
+    h2 {
+      text-align: center;
+      border-bottom: 1px solid #80ff80;
+      padding-bottom: 10px;
+    }
+    .action-bar {
+      margin: 20px 0;
+      display: flex;
+      gap: 10px;
+      justify-content: center;
+      flex-wrap: wrap;
+    }
+    .btn {
+      background-color: #2a2a2a;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+      padding: 10px 20px;
+      cursor: pointer;
+      font-family: 'Courier New', monospace;
+      font-size: 14px;
+    }
+    .btn:hover {
+      background-color: #3a3a3a;
+    }
+    .btn:disabled {
+      opacity: 0.5;
+      cursor: not-allowed;
+    }
+
+    .dashboard-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+      gap: 20px;
+      margin-top: 20px;
+    }
+
+    .card {
+      background-color: #0a0a0a;
+      border: 2px solid #80ff80;
+      border-radius: 8px;
+      padding: 20px;
+    }
+
+    .card h3 {
+      margin: 0 0 15px 0;
+      color: #80ff80;
+      border-bottom: 1px solid #333;
+      padding-bottom: 10px;
+    }
+
+    .card.alert {
+      border-color: #ff8080;
+    }
+
+    .card.alert h3 {
+      color: #ff8080;
+    }
+
+    .card.warning {
+      border-color: #ffcc44;
+    }
+
+    .card.warning h3 {
+      color: #ffcc44;
+    }
+
+    .stat-row {
+      display: flex;
+      justify-content: space-between;
+      padding: 8px 0;
+      border-bottom: 1px solid #333;
+    }
+
+    .stat-row:last-child {
+      border-bottom: none;
+    }
+
+    .stat-label {
+      color: #888;
+    }
+
+    .stat-value {
+      font-weight: bold;
+      color: #80ff80;
+    }
+
+    .property-list {
+      max-height: 400px;
+      overflow-y: auto;
+      margin-top: 15px;
+    }
+
+    .property-item {
+      background-color: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 12px;
+      margin: 8px 0;
+    }
+
+    .property-item.needs-service {
+      border-color: #ff8080;
+      background-color: #2a1a1a;
+    }
+
+    .property-item h4 {
+      margin: 0 0 8px 0;
+      color: #80ff80;
+    }
+
+    .property-item.needs-service h4 {
+      color: #ff8080;
+    }
+
+    .property-detail {
+      font-size: 12px;
+      color: #888;
+      margin: 4px 0;
+    }
+
+    .ai-summary {
+      background-color: #1a1a2e;
+      border: 2px solid #667eea;
+      border-radius: 8px;
+      padding: 20px;
+      margin: 20px 0;
+      white-space: pre-wrap;
+      line-height: 1.6;
+      color: #a0a0ff;
+    }
+
+    .loading {
+      text-align: center;
+      padding: 40px;
+      color: #888;
+    }
+
+    .forecast-timeline {
+      display: flex;
+      gap: 10px;
+      overflow-x: auto;
+      padding: 10px 0;
+    }
+
+    .forecast-hour {
+      background-color: #1a1a1a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 10px;
+      min-width: 100px;
+      text-align: center;
+    }
+
+    .forecast-hour.snow {
+      border-color: #667eea;
+      background-color: #1a1a2e;
+    }
+
+    .forecast-hour .time {
+      font-size: 11px;
+      color: #888;
+    }
+
+    .forecast-hour .temp {
+      font-size: 18px;
+      font-weight: bold;
+      color: #80ff80;
+      margin: 5px 0;
+    }
+
+    .forecast-hour .snow-amount {
+      font-size: 14px;
+      color: #667eea;
+      font-weight: bold;
+    }
+
+    .settings-info {
+      background-color: #0a0a0a;
+      border: 1px solid #333;
+      border-radius: 4px;
+      padding: 15px;
+      margin-bottom: 20px;
+      font-size: 12px;
+    }
+
+    .settings-info .status {
+      display: inline-block;
+      padding: 2px 8px;
+      border-radius: 3px;
+      font-size: 11px;
+      margin-left: 5px;
+    }
+
+    .settings-info .status.enabled {
+      background-color: #003300;
+      color: #80ff80;
+      border: 1px solid #80ff80;
+    }
+
+    .settings-info .status.disabled {
+      background-color: #330000;
+      color: #ff8080;
+      border: 1px solid #ff8080;
+    }
+  </style>
+</head>
+<body onload="initializePage()">
+  <h2>🌨️ Weather Dashboard</h2>
+
+  <div id="settingsInfo" class="settings-info"></div>
+
+  <div class="action-bar">
+    <button class="btn" onclick="refreshForecast()">🔄 Refresh Forecast</button>
+    <button class="btn" onclick="getAISummary()">🤖 Get AI Summary</button>
+    <button class="btn" onclick="location.href=getDashboardUrl()">🏠 Back to Dashboard</button>
+  </div>
+
+  <div id="aiSummaryContainer"></div>
+
+  <div class="dashboard-grid">
+    <div class="card">
+      <h3>📊 Overview</h3>
+      <div id="overviewStats"></div>
+    </div>
+
+    <div class="card warning">
+      <h3>⚠️ Properties Needing Service</h3>
+      <div id="serviceNeeded">Loading...</div>
+    </div>
+  </div>
+
+  <div class="card" style="margin-top: 20px;">
+    <h3>📍 All Properties Forecast</h3>
+    <div class="property-list" id="propertiesList">
+      <div class="loading">Loading forecast data...</div>
+    </div>
+  </div>
+
+  <script>
+    let forecastData = null;
+    let settings = null;
+
+    async function initializePage() {
+      checkAccess(['Admin', 'Manager']);
+      await loadSettings();
+      await refreshForecast();
+    }
+
+    async function loadSettings() {
+      const token = localStorage.getItem("token");
+      try {
+        const response = await fetch(`${API_BASE_URL}/weather/settings/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        settings = await response.json();
+        renderSettings();
+      } catch (err) {
+        console.error("Error loading settings:", err);
+      }
+    }
+
+    function renderSettings() {
+      const container = document.getElementById('settingsInfo');
+
+      const weatherStatus = settings.weather_api_configured
+        ? '<span class="status enabled">✓ Configured</span>'
+        : '<span class="status disabled">✗ Not Configured</span>';
+
+      const aiStatus = settings.ai_enabled
+        ? '<span class="status enabled">✓ Enabled</span>'
+        : '<span class="status disabled">✗ Disabled</span>';
+
+      container.innerHTML = `
+        <strong>Weather API:</strong> ${settings.api_provider} ${weatherStatus}<br>
+        <strong>AI Summaries:</strong> ${aiStatus}<br>
+        <strong>Forecast Interval:</strong> Every ${settings.forecast_interval_minutes} minutes
+        ${!settings.weather_api_configured ? '<br><br>⚠️ <strong>Setup Required:</strong> Add OPENWEATHER_API_KEY to environment variables to enable weather monitoring.' : ''}
+      `;
+    }
+
+    async function refreshForecast() {
+      const token = localStorage.getItem("token");
+      const propertiesList = document.getElementById('propertiesList');
+      propertiesList.innerHTML = '<div class="loading">Loading forecast data...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/weather/properties-forecast/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        forecastData = await response.json();
+        renderOverview();
+        renderServiceNeeded();
+        renderPropertiesList();
+      } catch (err) {
+        console.error("Error fetching forecast:", err);
+        propertiesList.innerHTML = `<div class="loading" style="color: #ff8080;">Error loading forecast: ${err.message}</div>`;
+      }
+    }
+
+    function renderOverview() {
+      const container = document.getElementById('overviewStats');
+
+      if (!forecastData || !forecastData.properties) {
+        container.innerHTML = '<div class="stat-row">No data available</div>';
+        return;
+      }
+
+      const avgSnow = forecastData.properties.length > 0
+        ? (forecastData.properties.reduce((sum, p) => sum + p.forecast_snow_24h, 0) / forecastData.properties.length).toFixed(2)
+        : 0;
+
+      container.innerHTML = `
+        <div class="stat-row">
+          <span class="stat-label">Total Properties:</span>
+          <span class="stat-value">${forecastData.total_properties}</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Need Service (24h):</span>
+          <span class="stat-value" style="color: ${forecastData.properties_needing_service > 0 ? '#ff8080' : '#80ff80'};">
+            ${forecastData.properties_needing_service}
+          </span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Avg Snow Forecast:</span>
+          <span class="stat-value">${avgSnow}"</span>
+        </div>
+        <div class="stat-row">
+          <span class="stat-label">Last Updated:</span>
+          <span class="stat-value">${new Date().toLocaleTimeString()}</span>
+        </div>
+      `;
+    }
+
+    function renderServiceNeeded() {
+      const container = document.getElementById('serviceNeeded');
+
+      if (!forecastData || !forecastData.properties) {
+        container.innerHTML = '<div class="stat-row">No data available</div>';
+        return;
+      }
+
+      const needingService = forecastData.properties.filter(p => p.needs_service);
+
+      if (needingService.length === 0) {
+        container.innerHTML = '<div style="text-align: center; color: #888; padding: 20px;">✓ No properties require service in the next 24 hours</div>';
+        return;
+      }
+
+      container.innerHTML = `<div style="font-size: 12px; color: #888; margin-bottom: 10px;">${needingService.length} properties will exceed trigger amounts:</div>`;
+
+      needingService.slice(0, 5).forEach(prop => {
+        const div = document.createElement('div');
+        div.className = 'stat-row';
+        div.style.flexDirection = 'column';
+        div.style.alignItems = 'flex-start';
+
+        div.innerHTML = `
+          <strong>${prop.property_name}</strong>
+          <div style="font-size: 11px; color: #888;">
+            Trigger: ${prop.trigger_amount}" | Forecast: ${prop.forecast_snow_24h}"
+            ${prop.open_by_time ? ` | Open by: ${prop.open_by_time}` : ''}
+          </div>
+        `;
+
+        container.appendChild(div);
+      });
+
+      if (needingService.length > 5) {
+        container.innerHTML += `<div style="text-align: center; color: #888; margin-top: 10px; font-size: 12px;">+ ${needingService.length - 5} more...</div>`;
+      }
+    }
+
+    function renderPropertiesList() {
+      const container = document.getElementById('propertiesList');
+
+      if (!forecastData || !forecastData.properties || forecastData.properties.length === 0) {
+        container.innerHTML = '<div class="loading">No properties with coordinates found. Add coordinates via the Property Map page.</div>';
+        return;
+      }
+
+      container.innerHTML = '';
+
+      // Sort: properties needing service first
+      const sorted = [...forecastData.properties].sort((a, b) => {
+        if (a.needs_service && !b.needs_service) return -1;
+        if (!a.needs_service && b.needs_service) return 1;
+        return b.forecast_snow_24h - a.forecast_snow_24h;
+      });
+
+      sorted.forEach(prop => {
+        const item = document.createElement('div');
+        item.className = `property-item ${prop.needs_service ? 'needs-service' : ''}`;
+
+        const badge = prop.needs_service ? '⚠️ NEEDS SERVICE' : '✓ OK';
+
+        item.innerHTML = `
+          <h4>${badge} ${prop.property_name}</h4>
+          <div class="property-detail"><strong>Address:</strong> ${prop.address}</div>
+          <div class="property-detail"><strong>Manager:</strong> ${prop.area_manager}</div>
+          <div class="property-detail">
+            <strong>Trigger:</strong> ${prop.trigger_amount}" (${getTriggerTypeLabel(prop.trigger_type)}) |
+            <strong>Forecast 24h:</strong> ${prop.forecast_snow_24h}"
+            ${prop.open_by_time ? ` | <strong>Open By:</strong> ${prop.open_by_time}` : ''}
+          </div>
+        `;
+
+        container.appendChild(item);
+      });
+    }
+
+    function getTriggerTypeLabel(type) {
+      const labels = {
+        'zero_tolerance': 'Zero Tolerance',
+        'half_inch': '0.5" Trigger',
+        'one_inch': '1" Trigger',
+        'two_inch': '2" Trigger',
+        'custom': 'Custom'
+      };
+      return labels[type] || type;
+    }
+
+    async function getAISummary() {
+      const token = localStorage.getItem("token");
+      const container = document.getElementById('aiSummaryContainer');
+
+      if (!settings.ai_enabled) {
+        container.innerHTML = `
+          <div class="ai-summary">
+            ⚠️ AI Summaries require OpenAI API key.
+            Add OPENAI_API_KEY to environment variables to enable this feature.
+          </div>
+        `;
+        return;
+      }
+
+      container.innerHTML = '<div class="ai-summary">🤖 Generating AI summary...</div>';
+
+      try {
+        const response = await fetch(`${API_BASE_URL}/weather/ai-summary/`, {
+          headers: { "Authorization": `Bearer ${token}` }
+        });
+
+        const data = await response.json();
+
+        container.innerHTML = `
+          <div class="ai-summary">
+            <strong>🤖 AI Weather Summary</strong><br><br>
+            ${data.summary}
+            <br><br>
+            <small style="color: #667eea;">Generated at ${new Date().toLocaleString()}</small>
+          </div>
+        `;
+      } catch (err) {
+        console.error("Error getting AI summary:", err);
+        container.innerHTML = `<div class="ai-summary" style="border-color: #ff8080; color: #ff8080;">Error: ${err.message}</div>`;
+      }
+    }
+  </script>
+    <script src="/static/ai-chat-widget.js"></script>
+</body>
+</html>

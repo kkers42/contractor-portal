@@ -38,4 +38,27 @@ if (typeof window.CONFIG_LOADED === 'undefined') {
       window.location.href = "login.html";
     }
   };
+
+  // Get dashboard URL based on user role
+  window.getDashboardUrl = function () {
+    const token = localStorage.getItem("token");
+    if (!token) {
+      return "login.html";
+    }
+
+    const payload = JSON.parse(atob(token.split(".")[1]));
+    const role = payload.role;
+
+    switch (role) {
+      case "Admin":
+        return "/static/AdminDashboard.html";
+      case "Manager":
+        return "/static/ManagerDashboard.html";
+      case "Subcontractor":
+      case "User":
+        return "/static/UserDashboard.html";
+      default:
+        return "/static/login.html";
+    }
+  };
 }
