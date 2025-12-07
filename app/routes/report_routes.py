@@ -344,6 +344,120 @@ def export_property_logs(filters: ReportFilters):
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )
 
+@router.post("/export/billing-report/")
+def export_billing_report(filters: ReportFilters):
+    """
+    Export billing report in the Excel format shown in the screenshot
+    Format: Header with Total Time, Truck Rate, Date
+    Columns: Date, Start Time, End Time, Total Min, HR $, Site, Qty Salt (yrd)
+    """
+    start = filters.start_date
+    end = filters.end_date
+    contractor_name = filters.contractor_name
+
+    where_parts = []
+    params = []
+
+    if start and end:
+        where_parts.append("w.time_in BETWEEN %s AND %s")
+        params += [start, end]
+
+    if contractor_name:
+        where_parts.append("w.contractor_name = %s")
+        params.append(contractor_name)
+
+    where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
+
+    query = f"""
+        SELECT
+            DATE(w.time_in) as work_date,
+            w.time_in,
+            w.time_out,
+            TIMESTAMPDIFF(MINUTE, w.time_in, w.time_out) as total_minutes,
+            TIMESTAMPDIFF(SECOND, w.time_in, w.time_out) / 3600 as hours,
+            l.name as site,
+            w.bulk_salt_qty,
+            w.contractor_name,
+            w.equipment
+        FROM winter_ops_logs w
+        JOIN locations l ON w.property_id = l.id
+        {where_clause}
+        ORDER BY w.time_in
+    """
+
+    logs = fetch_query(query, params if params else None)
+
+    if not logs:
+        raise HTTPException(status_code=404, detail="No logs found for the specified filters")
+
+    output = BytesIO()
+
+    # Calculate totals
+    total_minutes = sum(row['total_minutes'] or 0 for row in logs)
+    total_hours = total_minutes / 60
+    truck_rate = 150  # $150/hr as shown in screenshot
+
+    # Create Excel data
+    export_data = []
+
+    # Header rows
+    export_data.append(['', '', 'Total Time', f'{total_hours:.2f}', 'Date', end or datetime.now().strftime('%m/%d/%Y')])
+    export_data.append(['', '', f'Truck Rate ${truck_rate}/hr', '', '', ''])
+    export_data.append([])  # Blank row
+
+    # Column headers
+    export_data.append(['Date', 'Start Time', 'End Time', 'Total Min', 'HR $', 'Site', 'Qty Salt (yrd)'])
+
+    # Data rows
+    for row in logs:
+        work_date = pd.to_datetime(row['work_date']).strftime('%m/%d/%Y')
+        start_time = pd.to_datetime(row['time_in']).strftime('%I:%M:%S %p')
+        end_time = pd.to_datetime(row['time_out']).strftime('%I:%M:%S %p') if row['time_out'] else ''
+        total_min = int(row['total_minutes'] or 0)
+        hours = float(row['hours'] or 0)
+        hr_cost = round(hours * truck_rate, 2)
+        site = row['site']
+        salt_qty = row['bulk_salt_qty'] if row['bulk_salt_qty'] else ''
+
+        export_data.append([
+            work_date,
+            start_time,
+            end_time,
+            total_min,
+            hr_cost,
+            site,
+            salt_qty
+        ])
+
+    # Create DataFrame
+    df = pd.DataFrame(export_data)
+
+    # Write to Excel
+    with pd.ExcelWriter(output, engine='openpyxl') as writer:
+        df.to_excel(writer, sheet_name='Billing Report', index=False, header=False)
+
+        # Get worksheet for formatting
+        worksheet = writer.sheets['Billing Report']
+
+        # Auto-adjust column widths
+        for idx in range(len(df.columns)):
+            max_length = max(
+                df.iloc[:, idx].astype(str).map(len).max(),
+                10
+            )
+            worksheet.column_dimensions[chr(65 + idx)].width = min(max_length + 2, 30)
+
+    output.seek(0)
+
+    contractor_suffix = f"_{contractor_name}" if contractor_name else ""
+    filename = f"billing_report{contractor_suffix}_{start}_{end}.xlsx" if start and end else f"billing_report{contractor_suffix}.xlsx"
+
+    return StreamingResponse(
+        output,
+        media_type="application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
 @router.post("/export/winter-logs/")
 def export_winter_logs(filters: ReportFilters):
     """

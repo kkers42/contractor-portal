@@ -1,0 +1,278 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Billing Report</title>
+    <link rel="icon" type="image/svg+xml" href="/static/favicon.svg">
+    <script src="/static/config.js"></script>
+    <link rel="stylesheet" href="/static/mobile-responsive.css">
+    <link rel="stylesheet" href="/static/modern-theme.css">
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            margin: 0;
+            padding: 20px;
+            background-color: #1a1a1a;
+            color: #80ff80;
+        }
+        .container {
+            max-width: 800px;
+            margin: auto;
+            background-color: #000;
+            padding: 30px;
+            border-radius: 10px;
+            border: 1px solid #80ff80;
+            box-shadow: 0 0 10px rgba(0,255,0,0.2);
+        }
+        h2 {
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+            margin-bottom: 30px;
+        }
+        .filter-section {
+            margin-bottom: 20px;
+        }
+        label {
+            display: block;
+            margin-top: 15px;
+            margin-bottom: 5px;
+            font-weight: bold;
+        }
+        input, select {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            border-radius: 4px;
+            border: 1px solid #80ff80;
+            background-color: #000;
+            color: #80ff80;
+            font-family: 'Courier New', monospace;
+        }
+        button {
+            margin-top: 20px;
+            width: 100%;
+            padding: 12px;
+            background-color: #80ff80;
+            color: #000;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+            font-size: 16px;
+            font-weight: bold;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background-color: #60d060;
+        }
+        button:disabled {
+            background-color: #444;
+            color: #888;
+            cursor: not-allowed;
+        }
+        .back-button {
+            background-color: #444;
+            color: #80ff80;
+            margin-bottom: 20px;
+        }
+        .back-button:hover {
+            background-color: #555;
+        }
+        .error {
+            color: #ff6666;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .success {
+            color: #80ff80;
+            margin-top: 10px;
+            text-align: center;
+        }
+        .info-box {
+            background-color: #1a3a1a;
+            border: 1px solid #80ff80;
+            padding: 15px;
+            border-radius: 4px;
+            margin-bottom: 20px;
+        }
+        .info-box h3 {
+            margin-top: 0;
+            color: #80ff80;
+        }
+        .info-box ul {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <button class="back-button" onclick="window.history.back()">← Back</button>
+
+        <h2>Billing Report Generator</h2>
+
+        <div class="info-box">
+            <h3>Report Format</h3>
+            <p>This report generates an Excel file with the following columns:</p>
+            <ul>
+                <li>Date - Service date</li>
+                <li>Start Time - Time started</li>
+                <li>End Time - Time completed</li>
+                <li>Total Min - Total minutes worked</li>
+                <li>HR $ - Cost based on hourly rate ($150/hr)</li>
+                <li>Site - Property location</li>
+                <li>Qty Salt (yrd) - Bulk salt quantity in yards</li>
+            </ul>
+            <p>The report includes a header with total time and truck rate information.</p>
+        </div>
+
+        <div class="filter-section">
+            <label for="contractor">Contractor:</label>
+            <select id="contractor">
+                <option value="">All Contractors</option>
+            </select>
+
+            <label for="startDate">Start Date:</label>
+            <input type="date" id="startDate" required>
+
+            <label for="endDate">End Date:</label>
+            <input type="date" id="endDate" required>
+        </div>
+
+        <button id="generateBtn" onclick="generateReport()">Generate & Download Report</button>
+
+        <div id="message"></div>
+    </div>
+
+    <script>
+        const API_BASE = window.CONFIG?.API_BASE_URL || 'http://localhost:8000';
+
+        // Load contractors on page load
+        async function loadContractors() {
+            try {
+                const token = localStorage.getItem('token');
+                const response = await fetch(`${API_BASE}/winter-ops/logs/`, {
+                    headers: {
+                        'Authorization': `Bearer ${token}`
+                    }
+                });
+
+                if (response.ok) {
+                    const logs = await response.json();
+                    const contractors = new Set(logs.map(log => log.contractor_name).filter(Boolean));
+
+                    const select = document.getElementById('contractor');
+                    contractors.forEach(contractor => {
+                        const option = document.createElement('option');
+                        option.value = contractor;
+                        option.textContent = contractor;
+                        select.appendChild(option);
+                    });
+                }
+            } catch (error) {
+                console.error('Failed to load contractors:', error);
+            }
+        }
+
+        async function generateReport() {
+            const contractor = document.getElementById('contractor').value;
+            const startDate = document.getElementById('startDate').value;
+            const endDate = document.getElementById('endDate').value;
+            const messageDiv = document.getElementById('message');
+            const generateBtn = document.getElementById('generateBtn');
+
+            // Clear previous messages
+            messageDiv.innerHTML = '';
+            messageDiv.className = '';
+
+            // Validate dates
+            if (!startDate || !endDate) {
+                messageDiv.innerHTML = 'Please select both start and end dates';
+                messageDiv.className = 'error';
+                return;
+            }
+
+            // Disable button
+            generateBtn.disabled = true;
+            generateBtn.textContent = 'Generating...';
+
+            try {
+                const token = localStorage.getItem('token');
+
+                const requestBody = {
+                    start_date: startDate,
+                    end_date: endDate
+                };
+
+                if (contractor) {
+                    requestBody.contractor_name = contractor;
+                }
+
+                const response = await fetch(`${API_BASE}/export/billing-report/`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${token}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify(requestBody)
+                });
+
+                if (response.ok) {
+                    // Download the file
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+
+                    const contractorSuffix = contractor ? `_${contractor}` : '';
+                    a.download = `billing_report${contractorSuffix}_${startDate}_${endDate}.xlsx`;
+
+                    document.body.appendChild(a);
+                    a.click();
+                    document.body.removeChild(a);
+                    window.URL.revokeObjectURL(url);
+
+                    messageDiv.innerHTML = '✓ Report downloaded successfully!';
+                    messageDiv.className = 'success';
+                } else {
+                    const error = await response.json();
+                    messageDiv.innerHTML = `Error: ${error.detail || 'Failed to generate report'}`;
+                    messageDiv.className = 'error';
+                }
+            } catch (error) {
+                console.error('Error generating report:', error);
+                messageDiv.innerHTML = `Error: ${error.message}`;
+                messageDiv.className = 'error';
+            } finally {
+                // Re-enable button
+                generateBtn.disabled = false;
+                generateBtn.textContent = 'Generate & Download Report';
+            }
+        }
+
+        // Set default dates to current month
+        function setDefaultDates() {
+            const now = new Date();
+            const firstDay = new Date(now.getFullYear(), now.getMonth(), 1);
+            const lastDay = new Date(now.getFullYear(), now.getMonth() + 1, 0);
+
+            document.getElementById('startDate').valueAsDate = firstDay;
+            document.getElementById('endDate').valueAsDate = lastDay;
+        }
+
+        // Initialize on page load
+        window.addEventListener('DOMContentLoaded', () => {
+            setDefaultDates();
+            loadContractors();
+
+            // Check authentication
+            const token = localStorage.getItem('token');
+            if (!token) {
+                window.location.href = '/static/login.html';
+            }
+        });
+    </script>
+    <script src="/static/ai-chat-widget.js"></script>
+</body>
+</html>
