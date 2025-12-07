@@ -347,9 +347,11 @@ def export_property_logs(filters: ReportFilters):
 @router.post("/export/billing-report/")
 def export_billing_report(filters: ReportFilters):
     """
-    Export billing report in the Excel format shown in the screenshot
-    Format: Header with Total Time, Truck Rate, Date
-    Columns: Date, Start Time, End Time, Total Min, HR $, Site, Qty Salt (yrd)
+    Export billing report with ONE SHEET PER CONTRACTOR
+    Format per sheet:
+    - Top: Contractor name (e.g., "AgriFarms")
+    - Columns: Date, Time In, Time Out, Total Min, HR $, Site, Qty Salt (yrd)
+    - Bottom: Total hours for that contractor
     """
     start = filters.start_date
     end = filters.end_date
@@ -382,7 +384,7 @@ def export_billing_report(filters: ReportFilters):
         FROM winter_ops_logs w
         JOIN locations l ON w.property_id = l.id
         {where_clause}
-        ORDER BY w.time_in
+        ORDER BY w.contractor_name, w.time_in
     """
 
     logs = fetch_query(query, params if params else None)
@@ -391,65 +393,74 @@ def export_billing_report(filters: ReportFilters):
         raise HTTPException(status_code=404, detail="No logs found for the specified filters")
 
     output = BytesIO()
+    df = pd.DataFrame(logs)
+    truck_rate = 150  # $150/hr
 
-    # Calculate totals
-    total_minutes = sum(row['total_minutes'] or 0 for row in logs)
-    total_hours = total_minutes / 60
-    truck_rate = 150  # $150/hr as shown in screenshot
-
-    # Create Excel data
-    export_data = []
-
-    # Header rows
-    export_data.append(['', '', 'Total Time', f'{total_hours:.2f}', 'Date', end or datetime.now().strftime('%m/%d/%Y')])
-    export_data.append(['', '', f'Truck Rate ${truck_rate}/hr', '', '', ''])
-    export_data.append([])  # Blank row
-
-    # Column headers
-    export_data.append(['Date', 'Start Time', 'End Time', 'Total Min', 'HR $', 'Site', 'Qty Salt (yrd)'])
-
-    # Data rows
-    for row in logs:
-        work_date = pd.to_datetime(row['work_date']).strftime('%m/%d/%Y')
-        start_time = pd.to_datetime(row['time_in']).strftime('%I:%M:%S %p')
-        end_time = pd.to_datetime(row['time_out']).strftime('%I:%M:%S %p') if row['time_out'] else ''
-        total_min = int(row['total_minutes'] or 0)
-        hours = float(row['hours'] or 0)
-        hr_cost = round(hours * truck_rate, 2)
-        site = row['site']
-        salt_qty = row['bulk_salt_qty'] if row['bulk_salt_qty'] else ''
-
-        export_data.append([
-            work_date,
-            start_time,
-            end_time,
-            total_min,
-            hr_cost,
-            site,
-            salt_qty
-        ])
-
-    # Create DataFrame
-    df = pd.DataFrame(export_data)
-
-    # Write to Excel
+    # Group by contractor and create one sheet per contractor
     with pd.ExcelWriter(output, engine='openpyxl') as writer:
-        df.to_excel(writer, sheet_name='Billing Report', index=False, header=False)
+        for contractor in df['contractor_name'].unique():
+            contractor_logs = df[df['contractor_name'] == contractor]
 
-        # Get worksheet for formatting
-        worksheet = writer.sheets['Billing Report']
+            # Calculate contractor totals
+            contractor_total_minutes = contractor_logs['total_minutes'].sum()
+            contractor_total_hours = contractor_total_minutes / 60
 
-        # Auto-adjust column widths
-        for idx in range(len(df.columns)):
-            max_length = max(
-                df.iloc[:, idx].astype(str).map(len).max(),
-                10
-            )
-            worksheet.column_dimensions[chr(65 + idx)].width = min(max_length + 2, 30)
+            # Create sheet data
+            export_data = []
+
+            # Header: Contractor name
+            export_data.append([contractor])
+            export_data.append([])  # Blank row
+
+            # Column headers
+            export_data.append(['Date', 'Start Time', 'End Time', 'Total Min', 'HR $', 'Site', 'Qty Salt (yrd)'])
+
+            # Data rows
+            for _, row in contractor_logs.iterrows():
+                work_date = pd.to_datetime(row['work_date']).strftime('%m/%d/%Y')
+                start_time = pd.to_datetime(row['time_in']).strftime('%I:%M:%S %p')
+                end_time = pd.to_datetime(row['time_out']).strftime('%I:%M:%S %p') if row['time_out'] else ''
+                total_min = int(row['total_minutes'] or 0)
+                hours = float(row['hours'] or 0)
+                hr_cost = round(hours * truck_rate, 2)
+                site = row['site']
+                salt_qty = row['bulk_salt_qty'] if row['bulk_salt_qty'] else ''
+
+                export_data.append([
+                    work_date,
+                    start_time,
+                    end_time,
+                    total_min,
+                    hr_cost,
+                    site,
+                    salt_qty
+                ])
+
+            # Add totals row at bottom
+            export_data.append([])  # Blank row
+            export_data.append(['Total Hours:', f'{contractor_total_hours:.2f}'])
+
+            # Create DataFrame for this contractor
+            sheet_df = pd.DataFrame(export_data)
+
+            # Sheet name (sanitize contractor name for Excel)
+            sheet_name = contractor[:31]  # Excel 31 char limit
+
+            # Write to sheet
+            sheet_df.to_excel(writer, sheet_name=sheet_name, index=False, header=False)
+
+            # Auto-adjust column widths
+            worksheet = writer.sheets[sheet_name]
+            for idx in range(len(sheet_df.columns)):
+                max_length = max(
+                    sheet_df.iloc[:, idx].astype(str).map(len).max(),
+                    10
+                )
+                worksheet.column_dimensions[chr(65 + idx)].width = min(max_length + 2, 30)
 
     output.seek(0)
 
-    contractor_suffix = f"_{contractor_name}" if contractor_name else ""
+    contractor_suffix = f"_{contractor_name}" if contractor_name else "_all_contractors"
     filename = f"billing_report{contractor_suffix}_{start}_{end}.xlsx" if start and end else f"billing_report{contractor_suffix}.xlsx"
 
     return StreamingResponse(
