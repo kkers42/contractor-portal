@@ -361,7 +361,7 @@ def export_billing_report(filters: ReportFilters):
     params = []
 
     if start and end:
-        where_parts.append("w.time_in BETWEEN %s AND %s")
+        where_parts.append("DATE(w.time_in) BETWEEN %s AND %s")
         params += [start, end]
 
     if contractor_name:
@@ -484,7 +484,7 @@ def export_winter_logs(filters: ReportFilters):
     params = []
 
     if start and end:
-        where_parts.append("w.time_in BETWEEN %s AND %s")
+        where_parts.append("DATE(w.time_in) BETWEEN %s AND %s")
         params += [start, end]
 
     if property_id:
