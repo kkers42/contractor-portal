@@ -16,6 +16,7 @@ class ReportFilters(BaseModel):
     property_id: Optional[int] = None
     user_id: Optional[int] = None
     contractor_name: Optional[str] = None
+    equipment: Optional[str] = None
 
 @router.post("/report/by-product/")
 def report_by_product(filters: ReportFilters):
@@ -356,6 +357,7 @@ def export_billing_report(filters: ReportFilters):
     start = filters.start_date
     end = filters.end_date
     contractor_name = filters.contractor_name
+    equipment = filters.equipment
 
     where_parts = []
     params = []
@@ -367,6 +369,10 @@ def export_billing_report(filters: ReportFilters):
     if contractor_name:
         where_parts.append("w.contractor_name = %s")
         params.append(contractor_name)
+
+    if equipment:
+        where_parts.append("w.equipment = %s")
+        params.append(equipment)
 
     where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
 
@@ -479,6 +485,7 @@ def export_winter_logs(filters: ReportFilters):
     end = filters.end_date
     property_id = filters.property_id
     contractor_name = filters.contractor_name
+    equipment = filters.equipment
 
     where_parts = []
     params = []
@@ -494,6 +501,10 @@ def export_winter_logs(filters: ReportFilters):
     if contractor_name:
         where_parts.append("w.contractor_name = %s")
         params.append(contractor_name)
+
+    if equipment:
+        where_parts.append("w.equipment = %s")
+        params.append(equipment)
 
     where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
 

@@ -217,6 +217,12 @@
         </select>
       </div>
       <div class="filter-group">
+        <label>Equipment</label>
+        <select id="equipmentFilter">
+          <option value="">All Equipment</option>
+        </select>
+      </div>
+      <div class="filter-group">
         <label>Start Date</label>
         <input type="date" id="startDate">
       </div>
@@ -472,12 +478,24 @@
         option.textContent = contractor;
         contractorSelect.appendChild(option);
       });
+
+      // Populate equipment filter
+      const equipmentList = new Set(allLogs.map(log => log.equipment).filter(Boolean));
+      const equipmentSelect = document.getElementById('equipmentFilter');
+      equipmentSelect.innerHTML = '<option value="">All Equipment</option>';
+      equipmentList.forEach(equipment => {
+        const option = document.createElement('option');
+        option.value = equipment;
+        option.textContent = equipment;
+        equipmentSelect.appendChild(option);
+      });
     }
 
     function applyFilters() {
       const eventFilter = document.getElementById('eventFilter').value;
       const propertyFilter = document.getElementById('propertyFilter').value;
       const contractorFilter = document.getElementById('contractorFilter').value;
+      const equipmentFilter = document.getElementById('equipmentFilter').value;
       const startDate = document.getElementById('startDate').value;
       const endDate = document.getElementById('endDate').value;
 
@@ -485,6 +503,7 @@
         if (eventFilter && log.winter_event_name !== eventFilter) return false;
         if (propertyFilter && log.property_name !== propertyFilter) return false;
         if (contractorFilter && log.contractor_name !== contractorFilter) return false;
+        if (equipmentFilter && log.equipment !== equipmentFilter) return false;
 
         if (startDate) {
           const logDate = new Date(log.time_in).toISOString().split('T')[0];
@@ -506,6 +525,7 @@
       document.getElementById('eventFilter').value = '';
       document.getElementById('propertyFilter').value = '';
       document.getElementById('contractorFilter').value = '';
+      document.getElementById('equipmentFilter').value = '';
       document.getElementById('startDate').value = '';
       document.getElementById('endDate').value = '';
       renderLogs(allLogs);
@@ -579,6 +599,7 @@
       const endDate = document.getElementById('endDate').value;
       const propertyFilter = document.getElementById('propertyFilter').value;
       const contractorFilter = document.getElementById('contractorFilter').value;
+      const equipmentFilter = document.getElementById('equipmentFilter').value;
 
       // Find property ID if property name is selected
       let propertyId = null;
@@ -591,7 +612,8 @@
         start_date: startDate || null,
         end_date: endDate || null,
         property_id: propertyId,
-        contractor_name: contractorFilter || null
+        contractor_name: contractorFilter || null,
+        equipment: equipmentFilter || null
       };
 
       try {
