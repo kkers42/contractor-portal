@@ -1,0 +1,229 @@
+{
+  "name": "Contractor Portal Monitoring",
+  "nodes": [
+    {
+      "parameters": {
+        "httpMethod": "POST",
+        "path": "contractor-monitoring",
+        "responseMode": "onReceived",
+        "options": {}
+      },
+      "name": "Webhook - Monitoring Events",
+      "type": "n8n-nodes-base.webhook",
+      "typeVersion": 1,
+      "position": [250, 300],
+      "webhookId": "YOUR_WEBHOOK_ID"
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"type\"]}}",
+              "value2": "bug_report"
+            }
+          ]
+        }
+      },
+      "name": "Is Bug Report?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 300]
+    },
+    {
+      "parameters": {
+        "conditions": {
+          "string": [
+            {
+              "value1": "={{$json[\"type\"]}}",
+              "value2": "auto_repair"
+            }
+          ]
+        }
+      },
+      "name": "Is Auto Repair?",
+      "type": "n8n-nodes-base.if",
+      "typeVersion": 1,
+      "position": [450, 500]
+    },
+    {
+      "parameters": {
+        "operation": "create",
+        "title": "={{$json[\"data\"][\"diagnosis\"][\"diagnosis\"]}}",
+        "body": "=**Priority:** {{$json[\"data\"][\"diagnosis\"][\"severity\"].toUpperCase()}}\n\n**Root Cause:**\n{{$json[\"data\"][\"diagnosis\"][\"root_cause\"]}}\n\n**Health Report:**\n```json\n{{JSON.stringify($json[\"data\"][\"health_report\"], null, 2)}}\n```\n\n**Escalation Reason:**\n{{$json[\"data\"][\"diagnosis\"][\"escalation_reason\"]}}\n\n**Timestamp:** {{$json[\"timestamp\"]}}",
+        "labels": "bug,monitoring,{{$json[\"data\"][\"diagnosis\"][\"severity\"]}}",
+        "assignees": "",
+        "additionalFields": {}
+      },
+      "name": "Create GitHub Issue",
+      "type": "n8n-nodes-base.github",
+      "typeVersion": 1,
+      "position": [650, 200],
+      "credentials": {
+        "githubApi": {
+          "id": "YOUR_GITHUB_CREDENTIALS",
+          "name": "GitHub account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "to": "admin@yourcompany.com",
+        "subject": "=🚨 URGENT: {{$json[\"data\"][\"diagnosis\"][\"diagnosis\"]}}",
+        "text": "=Priority: {{$json[\"data\"][\"diagnosis\"][\"severity\"].toUpperCase()}}\n\nRoot Cause:\n{{$json[\"data\"][\"diagnosis\"][\"root_cause\"]}}\n\nManual intervention is required.\n\nEscalation Reason:\n{{$json[\"data\"][\"diagnosis\"][\"escalation_reason\"]}}\n\nPlease check the GitHub issue for full details.",
+        "options": {}
+      },
+      "name": "Send Email Alert",
+      "type": "n8n-nodes-base.emailSend",
+      "typeVersion": 1,
+      "position": [650, 300],
+      "credentials": {
+        "smtp": {
+          "id": "YOUR_SMTP_CREDENTIALS",
+          "name": "SMTP account"
+        }
+      }
+    },
+    {
+      "parameters": {
+        "webhookUri": "YOUR_DISCORD_WEBHOOK_URL",
+        "content": "",
+        "embeds": {
+          "values": [
+            {
+              "title": "={{$json[\"type\"] === \"auto_repair\" ? \"✅ Auto-Repair Completed\" : \"🚨 Issue Detected\"}}",
+              "description": "={{$json[\"data\"][\"diagnosis\"][\"diagnosis\"]}}",
+              "color": "={{$json[\"data\"][\"diagnosis\"][\"severity\"] === \"critical\" ? 16711680 : ($json[\"data\"][\"diagnosis\"][\"severity\"] === \"high\" ? 16744192 : 65280)}}",
+              "fields": {
+                "values": [
+                  {
+                    "name": "Severity",
+                    "value": "={{$json[\"data\"][\"diagnosis\"][\"severity\"].toUpperCase()}}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Type",
+                    "value": "={{$json[\"type\"]}}",
+                    "inline": true
+                  },
+                  {
+                    "name": "Actions Taken",
+                    "value": "={{$json[\"data\"][\"repair_results\"] ? $json[\"data\"][\"repair_results\"].map(r => (r.success ? '✅' : '❌') + ' ' + r.action).join('\\n') : 'None'}}"
+                  },
+                  {
+                    "name": "Timestamp",
+                    "value": "={{$json[\"timestamp\"]}}"
+                  }
+                ]
+              }
+            }
+          ]
+        },
+        "options": {}
+      },
+      "name": "Send Discord Notification",
+      "type": "n8n-nodes-base.discord",
+      "typeVersion": 1,
+      "position": [650, 500]
+    },
+    {
+      "parameters": {
+        "operation": "append",
+        "sheetId": "YOUR_GOOGLE_SHEET_ID",
+        "range": "A:E",
+        "options": {
+          "valueInputMode": "USER_ENTERED"
+        },
+        "data": "={{[\n  [\n    $json[\"timestamp\"],\n    $json[\"type\"],\n    $json[\"data\"][\"diagnosis\"][\"severity\"],\n    $json[\"data\"][\"diagnosis\"][\"diagnosis\"],\n    JSON.stringify($json[\"data\"][\"repair_results\"])\n  ]\n]}}"
+      },
+      "name": "Log to Google Sheets",
+      "type": "n8n-nodes-base.googleSheets",
+      "typeVersion": 1,
+      "position": [850, 400],
+      "credentials": {
+        "googleSheetsOAuth2Api": {
+          "id": "YOUR_GOOGLE_CREDENTIALS",
+          "name": "Google Sheets account"
+        }
+      }
+    }
+  ],
+  "connections": {
+    "Webhook - Monitoring Events": {
+      "main": [
+        [
+          {
+            "node": "Is Bug Report?",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Is Auto Repair?",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Bug Report?": {
+      "main": [
+        [
+          {
+            "node": "Create GitHub Issue",
+            "type": "main",
+            "index": 0
+          },
+          {
+            "node": "Send Email Alert",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Is Auto Repair?": {
+      "main": [
+        [
+          {
+            "node": "Send Discord Notification",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Create GitHub Issue": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Email Alert": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    },
+    "Send Discord Notification": {
+      "main": [
+        [
+          {
+            "node": "Log to Google Sheets",
+            "type": "main",
+            "index": 0
+          }
+        ]
+      ]
+    }
+  }
+}

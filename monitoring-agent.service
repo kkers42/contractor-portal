@@ -1,0 +1,18 @@
+[Unit]
+Description=Contractor Portal Monitoring Agent (Claude-Powered)
+After=network.target contractor-portal.service
+
+[Service]
+Type=simple
+User=root
+WorkingDirectory=/opt/contractor-portal/app
+Environment="ANTHROPIC_API_KEY=your_anthropic_api_key_here"
+Environment="N8N_WEBHOOK_URL=your_n8n_webhook_url_here"
+Environment="APP_URL=https://snow-contractor.com"
+Environment="SERVER_HOST=72.61.0.186"
+ExecStart=/opt/contractor-portal/venv/bin/python3 /opt/contractor-portal/app/services/monitoring_agent.py
+Restart=always
+RestartSec=60
+
+[Install]
+WantedBy=multi-user.target
