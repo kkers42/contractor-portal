@@ -1,12 +1,17 @@
 from fastapi import APIRouter, Depends, HTTPException
+from fastapi.responses import PlainTextResponse
 from pydantic import BaseModel
 from auth import get_current_user
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 from db import fetch_query, execute_query
 import os
 import httpx
 import json
 from typing import List, Dict, Optional
 from datetime import datetime
+from pathlib import Path
 
 router = APIRouter()
 
@@ -36,8 +41,8 @@ def get_user_context(current_user: dict) -> str:
     properties = fetch_query(
         """SELECT l.id, l.name, l.address
            FROM locations l
-           JOIN property_assignments pa ON l.id = pa.property_id
-           WHERE pa.contractor_id = %s""",
+           JOIN property_contractors pc ON l.id = pc.property_id
+           WHERE pc.contractor_id = %s AND pc.acceptance_status = 'accepted'""",
         (user_id,)
     )
 
@@ -169,6 +174,23 @@ def get_available_tools() -> List[Dict]:
                     "properties": {
                         "event_name": {"type": "string", "description": "Filter by event name"}
                     }
+                }
+            }
+        },
+        {
+            "type": "function",
+            "function": {
+                "name": "send_test_sms",
+                "description": "Send a test SMS to verify Twilio integration is working. Admin/Manager only.",
+                "parameters": {
+                    "type": "object",
+                    "properties": {
+                        "phone_number": {
+                            "type": "string",
+                            "description": "Phone number to send test SMS to (format: +1234567890)"
+                        }
+                    },
+                    "required": ["phone_number"]
                 }
             }
         }
@@ -376,6 +398,33 @@ def execute_tool(tool_name: str, arguments: Dict, current_user: dict) -> Dict:
         except Exception as e:
             return {"status": "error", "message": str(e)}
 
+    elif tool_name == "send_test_sms":
+        # Check permissions
+        if current_user.get("role") not in ["Admin", "Manager"]:
+            return {"status": "error", "message": "Only Admins and Managers can send test SMS"}
+
+        phone_number = arguments.get("phone_number")
+        if not phone_number:
+            return {"status": "error", "message": "phone_number is required"}
+
+        # Import send_sms from sms_routes
+        from routes.sms_routes import send_sms
+
+        message = """🧪 This is a test message from Snow Contractor Portal.
+
+Your SMS integration is working correctly!
+
+Please respond with 'hi' to confirm two-way messaging."""
+
+        try:
+            result = send_sms(phone_number, message)
+            if result:
+                return {"status": "success", "message": f"Test SMS sent successfully to {phone_number}"}
+            else:
+                return {"status": "error", "message": "Failed to send SMS - check Twilio configuration"}
+        except Exception as e:
+            return {"status": "error", "message": f"Failed to send test SMS: {str(e)}"}
+
     return {"status": "error", "message": f"Unknown tool: {tool_name}"}
 
 def get_system_prompt(page_context: str, user_context: str) -> str:
@@ -439,9 +488,17 @@ async def chat_with_ai(
 ) -> ChatResponse:
     """Chat with AI assistant using OpenAI API"""
 
-    # Check if API key is configured
-    openai_api_key = os.getenv("OPENAI_API_KEY")
-    if not openai_api_key:
+    # Load OpenAI API key from database (fallback to env var)
+    try:
+        result = fetch_query(
+            "SELECT key_value FROM api_keys WHERE key_name = 'openai_api_key' AND user_id IS NULL LIMIT 1"
+        )
+        openai_api_key = result[0]['key_value'] if result and result[0].get('key_value') else os.getenv("OPENAI_API_KEY")
+    except Exception as e:
+        logger.error(f"Failed to fetch OpenAI API key from database: {str(e)}", exc_info=True)
+        openai_api_key = os.getenv("OPENAI_API_KEY")
+
+    if not openai_api_key or openai_api_key == "your_openai_api_key_here":
         raise HTTPException(
             status_code=503,
             detail="AI assistant is not configured. Please contact administrator to set up OpenAI API key."
@@ -474,12 +531,12 @@ async def chat_with_ai(
                     "Content-Type": "application/json"
                 },
                 json={
-                    "model": "gpt-4-turbo-preview",  # GPT-4 Turbo supports function calling well
+                    "model": "gpt-4o",  # GPT-4o is the latest model with better function calling
                     "messages": messages,
                     "tools": tools,
                     "tool_choice": "auto",  # Let GPT decide when to use tools
                     "temperature": 0.7,
-                    "max_tokens": 1000
+                    "max_tokens": 2000  # Increased for complex table operations
                 }
             )
 
@@ -522,10 +579,10 @@ async def chat_with_ai(
                         "Content-Type": "application/json"
                     },
                     json={
-                        "model": "gpt-4-turbo-preview",
+                        "model": "gpt-4o",  # Use same model for consistency
                         "messages": messages,
                         "temperature": 0.7,
-                        "max_tokens": 1000
+                        "max_tokens": 2000  # Increased for complex responses
                     }
                 )
 
@@ -556,7 +613,7 @@ async def chat_with_ai(
     except httpx.TimeoutException:
         raise HTTPException(status_code=504, detail="AI assistant timed out. Please try again.")
     except Exception as e:
-        print(f"[ERROR] AI chat error: {str(e)}")
+        logger.error(f"AI chat error: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"AI assistant error: {str(e)}")
 
 @router.get("/ai/suggestions/")
@@ -601,4 +658,84 @@ async def get_suggestions(
 
     return {
         "suggestions": suggestions.get(page, suggestions["default"])
+    }
+
+
+@router.get("/workflows/{doc_name}", response_class=PlainTextResponse)
+async def get_workflow_doc(doc_name: str):
+    """
+    Serve workflow documentation for ChatGPT agents
+    Available docs: README, SYSTEM_ARCHITECTURE, DATABASE_SCHEMA, SMS_WORKFLOW, WINTER_EVENT_WORKFLOW, AI_INTEGRATION
+    """
+    # Validate doc name (security: prevent directory traversal)
+    allowed_docs = [
+        "README",
+        "SYSTEM_ARCHITECTURE",
+        "DATABASE_SCHEMA",
+        "SMS_WORKFLOW",
+        "WINTER_EVENT_WORKFLOW",
+        "AI_INTEGRATION"
+    ]
+
+    if doc_name not in allowed_docs:
+        raise HTTPException(status_code=404, detail="Documentation not found")
+
+    # Path to workflows directory (go up from routes dir)
+    workflows_dir = Path(__file__).parent.parent.parent / "workflows"
+    doc_path = workflows_dir / f"{doc_name}.md"
+
+    if not doc_path.exists():
+        raise HTTPException(status_code=404, detail="Documentation file not found")
+
+    try:
+        with open(doc_path, 'r', encoding='utf-8') as f:
+            content = f.read()
+        return content
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Error reading documentation: {str(e)}")
+
+
+@router.get("/workflows")
+async def list_workflow_docs():
+    """
+    List all available workflow documentation for ChatGPT agents
+    """
+    docs = {
+        "README": {
+            "title": "Workflow Documentation Index",
+            "url": "/workflows/README",
+            "description": "Master index and navigation guide for all workflow docs"
+        },
+        "SYSTEM_ARCHITECTURE": {
+            "title": "System Architecture Overview",
+            "url": "/workflows/SYSTEM_ARCHITECTURE",
+            "description": "Complete system overview, tech stack, integrations, deployment"
+        },
+        "DATABASE_SCHEMA": {
+            "title": "Database Schema Documentation",
+            "url": "/workflows/DATABASE_SCHEMA",
+            "description": "All tables, relationships, queries, data model"
+        },
+        "SMS_WORKFLOW": {
+            "title": "SMS Workflow Documentation",
+            "url": "/workflows/SMS_WORKFLOW",
+            "description": "Text messaging system with ChatGPT interpretation"
+        },
+        "WINTER_EVENT_WORKFLOW": {
+            "title": "Winter Event Workflow",
+            "url": "/workflows/WINTER_EVENT_WORKFLOW",
+            "description": "Snow storm operations end-to-end"
+        },
+        "AI_INTEGRATION": {
+            "title": "AI Integration Documentation",
+            "url": "/workflows/AI_INTEGRATION",
+            "description": "ChatGPT vs Claude roles, costs, usage"
+        }
+    }
+
+    return {
+        "status": "success",
+        "message": "Available workflow documentation for ChatGPT agents",
+        "docs": docs,
+        "usage": "Access any doc via GET /workflows/{doc_name}"
     }

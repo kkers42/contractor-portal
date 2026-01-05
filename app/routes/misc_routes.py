@@ -1,6 +1,9 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from db import fetch_query, execute_query
 from auth import get_current_user, hash_password
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 import os
 import smtplib
 from email.mime.text import MIMEText
@@ -32,7 +35,7 @@ def signup_request(
         print(f"[SUCCESS] User created with pending status: {email}")
     except Exception as e:
         error_msg = str(e)
-        print(f"[ERROR] Failed to save signup request: {error_msg}")
+        logger.error(f"Failed to save signup request: {error_msg}", exc_info=True)
 
         # If status column doesn't exist, try without it
         if "status" in error_msg.lower() or "unknown column" in error_msg.lower():
@@ -46,7 +49,7 @@ def signup_request(
                 execute_query(query, values)
                 print(f"[SUCCESS] User created without status: {email}")
             except Exception as e2:
-                print(f"[ERROR] Retry also failed: {str(e2)}")
+                logger.error(f"Retry also failed: {str(e2)}", exc_info=True)
                 raise HTTPException(status_code=500, detail=f"Failed to save signup request: {str(e2)}")
         else:
             raise HTTPException(status_code=500, detail=f"Failed to save signup request: {error_msg}")
@@ -102,7 +105,7 @@ def request_user(
         execute_query(query, values)
         print(f"[SUCCESS] User request created with pending status: {email}")
     except Exception as e:
-        print(f"[ERROR] Failed to save user request: {str(e)}")
+        logger.error(f"Failed to save user request: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to save user request: {str(e)}")
 
     # Try to send email notification (non-critical)

@@ -11,29 +11,66 @@ import json
 import os
 from datetime import datetime
 from auth import get_current_user
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 from db import fetch_query, execute_query
-import anthropic
+from openai import OpenAI
 
 router = APIRouter()
 
-# Twilio credentials (set via environment variables)
-TWILIO_ACCOUNT_SID = os.getenv('TWILIO_ACCOUNT_SID')
-TWILIO_AUTH_TOKEN = os.getenv('TWILIO_AUTH_TOKEN')
-TWILIO_PHONE_NUMBER = os.getenv('TWILIO_PHONE_NUMBER')
+def get_api_key(key_name: str, user_id: int = None) -> str:
+    """Get API key from database or environment variable"""
+    # First try database (user-specific or system-wide)
+    if user_id:
+        query = """
+            SELECT key_value FROM api_keys
+            WHERE key_name = %s AND (user_id = %s OR user_id IS NULL)
+            ORDER BY user_id DESC
+            LIMIT 1
+        """
+        result = fetch_query(query, (key_name, user_id))
+    else:
+        query = """
+            SELECT key_value FROM api_keys
+            WHERE key_name = %s AND user_id IS NULL
+            LIMIT 1
+        """
+        result = fetch_query(query, (key_name,))
 
-# Anthropic API for AI interpretation
-ANTHROPIC_API_KEY = os.getenv('ANTHROPIC_API_KEY')
+    if result and result[0]["key_value"]:
+        return result[0]["key_value"]
+
+    # Fallback to environment variable
+    env_map = {
+        'twilio_account_sid': 'TWILIO_ACCOUNT_SID',
+        'twilio_auth_token': 'TWILIO_AUTH_TOKEN',
+        'twilio_phone_number': 'TWILIO_PHONE_NUMBER',
+        'openai_api_key': 'OPENAI_API_KEY'
+    }
+    env_var = env_map.get(key_name)
+    if env_var:
+        return os.getenv(env_var, "")
+    return ""
 
 def send_sms(to_phone: str, message: str, conversation_id: int = None):
     """Send SMS via Twilio"""
     try:
         from twilio.rest import Client
 
-        client = Client(TWILIO_ACCOUNT_SID, TWILIO_AUTH_TOKEN)
+        # Get Twilio credentials from database or environment
+        account_sid = get_api_key('twilio_account_sid')
+        auth_token = get_api_key('twilio_auth_token')
+        phone_number = get_api_key('twilio_phone_number')
+
+        if not account_sid or not auth_token or not phone_number:
+            raise Exception("Twilio credentials not configured")
+
+        client = Client(account_sid, auth_token)
 
         message_obj = client.messages.create(
             body=message,
-            from_=TWILIO_PHONE_NUMBER,
+            from_=phone_number,
             to=to_phone
         )
 
@@ -47,14 +84,19 @@ def send_sms(to_phone: str, message: str, conversation_id: int = None):
 
         return message_obj
     except Exception as e:
-        print(f"[ERROR] Failed to send SMS: {e}")
+        logger.error(f"Failed to send SMS: {e}", exc_info=True)
         return None
 
 
 def get_ai_interpretation(user_message: str, conversation_context: dict):
-    """Use Claude AI to interpret SMS message and extract ticket data"""
+    """Use ChatGPT to interpret SMS message and extract ticket data"""
 
-    client = anthropic.Anthropic(api_key=ANTHROPIC_API_KEY)
+    # Get OpenAI API key from database or environment
+    api_key = get_api_key('openai_api_key')
+    if not api_key:
+        raise Exception("OpenAI API key not configured")
+
+    client = OpenAI(api_key=api_key)
 
     system_prompt = """You are an AI assistant helping contractors manage winter service tickets via SMS.
 
@@ -98,25 +140,29 @@ Respond ONLY with valid JSON, no other text."""
         context_info += f"Partial ticket data: {json.dumps(conversation_context['partial_data'])}\n"
 
     try:
-        message = client.messages.create(
-            model="claude-3-5-sonnet-20241022",
-            max_tokens=1024,
-            system=system_prompt,
+        response = client.chat.completions.create(
+            model="gpt-4o-mini",
             messages=[
+                {
+                    "role": "system",
+                    "content": system_prompt
+                },
                 {
                     "role": "user",
                     "content": f"{context_info}\nUser message: {user_message}"
                 }
-            ]
+            ],
+            temperature=0.3,
+            max_tokens=500
         )
 
-        response_text = message.content[0].text.strip()
+        response_text = response.choices[0].message.content.strip()
         # Parse JSON from response
         interpretation = json.loads(response_text)
         return interpretation
 
     except Exception as e:
-        print(f"[ERROR] AI interpretation failed: {e}")
+        logger.error(f"AI interpretation failed: {e}", exc_info=True)
         return {
             "intent": "unknown",
             "confidence": "low",
@@ -200,6 +246,28 @@ async def sms_webhook(
     # Get conversation context
     context_data = json.loads(conversation['context_data']) if conversation['context_data'] else {}
 
+    # Check if this is a response to N8N self-healing system
+    if message_body.upper().strip() in ['1', '2', '3', 'FIX', 'IGNORE', 'CUSTOM'] or 'ERROR ID:' in context_data.get('last_message', ''):
+        # Forward to N8N webhook
+        try:
+            import requests
+            n8n_url = "http://localhost:5678/webhook/human-decision"
+            payload = {
+                "body": {
+                    "error_id": context_data.get('error_id', 'unknown'),
+                    "message": message_body,
+                    "phone": phone_number,
+                    "timestamp": datetime.now().isoformat()
+                }
+            }
+            requests.post(n8n_url, json=payload, timeout=10)
+
+            # Send confirmation
+            send_sms(phone_number, f"✅ Decision received: {message_body}\\n\\nProcessing your request...")
+            return Response(content="<?xml version='1.0' encoding='UTF-8'?><Response></Response>", media_type="application/xml")
+        except Exception as e:
+            print(f"[SMS] Failed to forward to N8N: {e}")
+
     # Use AI to interpret the message
     interpretation = get_ai_interpretation(message_body, {
         'state': conversation['conversation_state'],
@@ -242,8 +310,8 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
     user = fetch_query("SELECT name, role FROM users WHERE id = %s", (user_id,))
     user_name = user[0]['name'] if user else 'Unknown'
 
-    # START TICKET
-    if intent == 'start_ticket':
+    # START TICKET (also triggered by "OMW" or "ON MY WAY")
+    if intent == 'start_ticket' or message_body.lower() in ['omw', 'on my way']:
         # Check if user has assigned properties
         assigned = fetch_query(
             """SELECT l.id, l.name, l.address
@@ -401,10 +469,15 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
             return "❌ No active ticket to complete."
 
         # Update ticket with time_out and any final details
-        now = datetime.now()
-        time_out = now.strftime('%Y-%m-%d %H:%M:%S')
+        from ops_routes import snap_to_15_minutes
 
-        updates = ["time_out = %s"]
+        now = datetime.now()
+        time_out_raw = now.strftime('%Y-%m-%d %H:%M:%S')
+
+        # Snap time to 15 minutes
+        time_out = snap_to_15_minutes(time_out_raw)
+
+        updates = ["time_out = %s", "status = 'closed'"]
         params = [time_out]
 
         if interpretation.get('bag_salt_qty') is not None:
@@ -438,14 +511,136 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
         property_name = context_data.get('property_name', 'Property')
         return f"✅ Ticket completed for {property_name}!\n\nThank you. Reply START when you begin the next job."
 
+    # STATUS UPDATE COMMAND - Update check-in status
+    elif message_body.lower() in ['working', 'busy', 'on site', 'servicing']:
+        # Get active check-in
+        active_checkin = fetch_query(
+            """SELECT ec.id, we.event_name
+               FROM event_checkins ec
+               JOIN winter_events we ON ec.winter_event_id = we.id
+               WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
+               LIMIT 1""",
+            (user_id,)
+        )
+
+        if not active_checkin:
+            return "❌ You're not checked in. Reply READY to check in for the active event first."
+
+        # Update status to working
+        execute_query(
+            """UPDATE event_checkins
+               SET status = 'working', updated_at = NOW()
+               WHERE id = %s""",
+            (active_checkin[0]['id'],)
+        )
+
+        return f"✅ Status updated to WORKING for {active_checkin[0]['event_name']}.\n\nReply READY when available for new assignments, or HOME when finished."
+
+    # CHECK-IN COMMAND - Check in for active event
+    elif message_body.lower() in ['ready', 'checkin', 'check in', 'check-in', 'available']:
+        # Get active winter event
+        active_event = fetch_query(
+            "SELECT id, event_name FROM winter_events WHERE status = 'active' LIMIT 1"
+        )
+
+        if not active_event:
+            return "❌ No active snow event. Check-in is only available during active events."
+
+        event_id = active_event[0]['id']
+        event_name = active_event[0]['event_name']
+
+        # Get user's default equipment
+        user_info = fetch_query(
+            "SELECT default_equipment FROM users WHERE id = %s",
+            (user_id,)
+        )
+        default_equipment = user_info[0].get('default_equipment') if user_info else None
+
+        # Check if already checked in
+        existing_checkin = fetch_query(
+            "SELECT id, status FROM event_checkins WHERE winter_event_id = %s AND user_id = %s AND checked_out_at IS NULL",
+            (event_id, user_id)
+        )
+
+        if existing_checkin:
+            # Update existing check-in
+            execute_query(
+                """UPDATE event_checkins
+                   SET status = 'checked_in', equipment_in_use = %s, updated_at = NOW()
+                   WHERE id = %s""",
+                (default_equipment, existing_checkin[0]['id'])
+            )
+            return f"✅ You're already checked in for {event_name}!\n\nStatus updated to READY. You may receive assignments soon.\n\nReply WORKING when servicing a property, or HOME when finished."
+        else:
+            # Create new check-in
+            execute_query(
+                """INSERT INTO event_checkins (winter_event_id, user_id, equipment_in_use, status, notes)
+                   VALUES (%s, %s, %s, 'checked_in', 'Checked in via SMS')""",
+                (event_id, user_id, default_equipment)
+            )
+            return f"✅ Checked in for {event_name}!\n\nEquipment: {default_equipment or 'Not specified'}\n\nYou may receive assignments soon.\n\nReply:\n- WORKING when servicing\n- HOME when finished"
+
+    # HOME COMMAND - Check out and mark user as unavailable
+    elif message_body.lower() in ['home', 'off', 'offline']:
+        # Check out from any active events
+        active_checkin = fetch_query(
+            """SELECT ec.id, we.event_name
+               FROM event_checkins ec
+               JOIN winter_events we ON ec.winter_event_id = we.id
+               WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
+               LIMIT 1""",
+            (user_id,)
+        )
+
+        if active_checkin:
+            execute_query(
+                """UPDATE event_checkins
+                   SET checked_out_at = NOW(), status = 'completed'
+                   WHERE id = %s""",
+                (active_checkin[0]['id'],)
+            )
+
+        # Mark user as unavailable for auto-assignment
+        execute_query(
+            "UPDATE users SET available_for_assignment = FALSE WHERE id = %s",
+            (user_id,)
+        )
+
+        # Close any open tickets
+        execute_query(
+            """UPDATE winter_ops_logs
+               SET status = 'closed', time_out = NOW(), notes = CONCAT(COALESCE(notes, ''), '\n[User went home - auto-closed]')
+               WHERE user_id = %s AND status = 'open'""",
+            (user_id,)
+        )
+
+        # Reset conversation
+        execute_query(
+            """UPDATE sms_conversations
+               SET conversation_state = 'idle',
+                   active_ticket_id = NULL,
+                   active_property_id = NULL,
+                   context_data = '{}',
+                   last_message_at = NOW()
+               WHERE id = %s""",
+            (conversation['id'],)
+        )
+
+        return "🏠 You're marked as HOME. Checked out and any open tickets have been closed. You won't receive new assignments until a manager re-enables you. Drive safe!"
+
     # UNKNOWN / HELP
     else:
         if 'help' in message_body.lower():
-            return """📱 SMS Ticket Help:
+            return """📱 SMS Commands:
 
-START - Begin a new ticket
-DONE - Complete current ticket
-Status of tickets - Check ticket status
+🔔 EVENT CHECK-IN:
+READY / CHECKIN - Check in for active event
+WORKING - Update status to working
+HOME / OFF - Check out and go offline
+
+🎫 TICKET MANAGEMENT:
+START / OMW - Begin a new ticket
+DONE / COMPLETE - Complete current ticket
 
 While working, just text:
 - Equipment used
@@ -456,14 +651,26 @@ Example: "Plow truck 3 yards bulk salt parking lot clear"
 
 Need help? Call dispatch."""
         else:
-            return "🤔 I didn't understand that. Reply:\n- START to begin ticket\n- DONE to finish ticket\n- HELP for commands"
+            return "🤔 I didn't understand that. Reply:\n- READY to check in\n- START to begin ticket\n- DONE to finish ticket\n- HOME to go offline\n- HELP for commands"
 
 
 def create_ticket_from_sms(user_id: int, user_name: str, property_id: int):
-    """Create a new winter ops log ticket from SMS"""
+    """Create a new winter ops log ticket from SMS with 15-min snapped time and default equipment"""
+
+    from ops_routes import snap_to_15_minutes
 
     now = datetime.now()
-    time_in = now.strftime('%Y-%m-%d %H:%M:%S')
+    time_in_raw = now.strftime('%Y-%m-%d %H:%M:%S')
+
+    # Snap time to 15 minutes
+    time_in = snap_to_15_minutes(time_in_raw)
+
+    # Get user's default equipment
+    user_info = fetch_query(
+        "SELECT default_equipment FROM users WHERE id = %s",
+        (user_id,)
+    )
+    default_equipment = user_info[0]['default_equipment'] if user_info and user_info[0].get('default_equipment') else 'Not specified'
 
     # Get active winter event
     active_event = fetch_query(
@@ -473,17 +680,17 @@ def create_ticket_from_sms(user_id: int, user_name: str, property_id: int):
 
     execute_query(
         """INSERT INTO winter_ops_logs
-           (property_id, contractor_id, contractor_name, worker_name, equipment,
-            time_in, time_out, bulk_salt_qty, bag_salt_qty, calcium_chloride_qty,
+           (property_id, user_id, contractor_id, contractor_name, worker_name, equipment,
+            time_in, time_out, status, bulk_salt_qty, bag_salt_qty, calcium_chloride_qty,
             customer_provided, notes, winter_event_id)
-           VALUES (%s, %s, %s, %s, %s, %s, NULL, 0, 0, 0, FALSE, %s, %s)""",
-        (property_id, user_id, user_name, user_name, 'To be filled via SMS',
+           VALUES (%s, %s, %s, %s, %s, %s, %s, NULL, 'open', 0, 0, 0, FALSE, %s, %s)""",
+        (property_id, user_id, user_id, user_name, user_name, default_equipment,
          time_in, f'Ticket started via SMS at {now.strftime("%I:%M %p")}', winter_event_id)
     )
 
     # Get the created ticket ID
     ticket = fetch_query(
-        "SELECT id FROM winter_ops_logs WHERE contractor_id = %s ORDER BY id DESC LIMIT 1",
+        "SELECT id FROM winter_ops_logs WHERE user_id = %s ORDER BY id DESC LIMIT 1",
         (user_id,)
     )
 
@@ -503,17 +710,14 @@ async def notify_assignment(
     if current_user['role'] not in ['Admin', 'Manager']:
         raise HTTPException(status_code=403, detail="Admin/Manager only")
 
-    # Get contractor phone number
+    # Get contractor phone number and default equipment
     contractor = fetch_query(
-        "SELECT phone_number, name, sms_notifications_enabled FROM users WHERE id = %s",
+        "SELECT phone_number, name, default_equipment FROM users WHERE id = %s",
         (contractor_id,)
     )
 
     if not contractor or not contractor[0]['phone_number']:
         return {"message": "Contractor has no phone number"}
-
-    if not contractor[0]['sms_notifications_enabled']:
-        return {"message": "Contractor has SMS notifications disabled"}
 
     # Get property info
     property_info = fetch_query(
@@ -524,18 +728,44 @@ async def notify_assignment(
     if not property_info:
         raise HTTPException(status_code=404, detail="Property not found")
 
-    # Send SMS
+    # Build SMS message with default equipment
+    default_equipment = contractor[0].get('default_equipment', 'Not set')
+
     message = f"""📍 New Assignment!
 
 Property: {property_info[0]['name']}
 Address: {property_info[0]['address']}
+Default Equipment: {default_equipment}
 
-Reply START when you begin work.
+Reply START / OMW / ON MY WAY when you begin work.
 Reply HELP for commands."""
 
     send_sms(contractor[0]['phone_number'], message)
 
     return {"message": "SMS notification sent", "phone": contractor[0]['phone_number']}
+
+
+@router.post("/sms/send-test")
+async def send_test_sms(
+    phone_number: str,
+    current_user: dict = Depends(get_current_user)
+):
+    """Send a test SMS to verify Twilio integration (Admin/Manager only)"""
+
+    if current_user['role'] not in ['Admin', 'Manager']:
+        raise HTTPException(status_code=403, detail="Admin/Manager only")
+
+    message = """🧪 This is a test message from Snow Contractor Portal.
+
+Your SMS integration is working correctly!
+
+Please respond with 'hi' to confirm two-way messaging."""
+
+    try:
+        send_sms(phone_number, message)
+        return {"message": "Test SMS sent successfully", "phone": phone_number}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to send test SMS: {str(e)}")
 
 
 @router.get("/sms/conversations")

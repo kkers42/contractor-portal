@@ -4,9 +4,23 @@ from fastapi.staticfiles import StaticFiles
 from fastapi.responses import FileResponse
 from starlette.middleware.sessions import SessionMiddleware
 from routers.auth_oidc import router as auth_router
+from pathlib import Path
 import os
 
-app = FastAPI()
+# Read version from VERSION file
+VERSION_FILE = Path(__file__).parent.parent / "VERSION"
+try:
+    with open(VERSION_FILE, 'r') as f:
+        APP_VERSION = f.read().strip()
+except:
+    APP_VERSION = "unknown"
+
+# Initialize logging system with Discord integration
+from utils.logger import get_logger
+logger = get_logger(__name__)
+logger.info(f"Starting Contractor App v{APP_VERSION}")
+
+app = FastAPI(title="Contractor App", version=APP_VERSION)
 
 # Add SessionMiddleware BEFORE other middleware (required for OAuth)
 app.add_middleware(
@@ -46,7 +60,12 @@ from routes import (
     tenant_routes,
     winter_event_routes,
     assignment_routes,
-    sms_routes
+    sms_routes,
+    n8n_routes,
+    n8n_auth_routes,
+    quickbooks_routes,
+    email_routes,
+    checkin_routes
 )
 
 app.include_router(auth_routes.router)
@@ -65,6 +84,11 @@ app.include_router(tenant_routes.router)
 app.include_router(winter_event_routes.router)
 app.include_router(assignment_routes.router)
 app.include_router(sms_routes.router)
+app.include_router(n8n_routes.router)
+app.include_router(n8n_auth_routes.router)
+app.include_router(quickbooks_routes.router)
+app.include_router(email_routes.router)
+app.include_router(checkin_routes.router)
 
 if __name__ == "__main__":
     import uvicorn

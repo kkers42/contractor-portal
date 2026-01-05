@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from db import execute_query, fetch_query
 from auth import hash_password, verify_password, create_access_token, decode_access_token
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 from pydantic import BaseModel
 from auth import get_current_user
 import os
@@ -15,13 +18,14 @@ class User(BaseModel):
     role: str
     password: str
     contractor_id: int = None  # For subcontractors, links to their contractor
+    default_equipment: str = None  # Default equipment for this user
 
 @router.get("/users/")
 def get_users(current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
     query = """
-        SELECT u.id, u.name, u.phone, u.email, u.role, u.status, u.contractor_id,
+        SELECT u.id, u.name, u.phone, u.email, u.role, u.status, u.contractor_id, u.default_equipment,
                c.name as contractor_name
         FROM users u
         LEFT JOIN users c ON u.contractor_id = c.id
@@ -34,7 +38,7 @@ def get_users(current_user: dict = Depends(get_current_user)):
 def get_contractors():
     """Get all active users (anyone can be assigned to plow in a snowstorm)"""
     query = """
-        SELECT id, name, phone, email, role
+        SELECT id, name, phone, email, role, default_equipment
         FROM users
         WHERE status = 'active'
         ORDER BY name
@@ -52,11 +56,11 @@ def add_user(user: User, current_user: dict = Depends(get_current_user)):
         hashed_pw = hash_password(user.password)
         # Generate username from email
         username = user.email.split('@')[0]
-        query = "INSERT INTO users (name, phone, username, email, role, contractor_id, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, 'active')"
-        execute_query(query, (user.name, user.phone, username, user.email, user.role, user.contractor_id, hashed_pw, hashed_pw))
+        query = "INSERT INTO users (name, phone, username, email, role, contractor_id, default_equipment, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'active')"
+        execute_query(query, (user.name, user.phone, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw))
         return {"message": "User added successfully!"}
     except Exception as e:
-        print(f"[ERROR] Failed to add user: {str(e)}")
+        logger.error(f"Failed to add user: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
 
 @router.put("/update-user/{user_id}")
@@ -65,8 +69,8 @@ def update_user(user_id: int, user: User, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
     hashed_pw = hash_password(user.password)
     username = user.email.split('@')[0]
-    query = "UPDATE users SET name = %s, phone = %s, username = %s, email = %s, role = %s, contractor_id = %s, password = %s, password_hash = %s, updated_at = NOW() WHERE id = %s"
-    values = (user.name, user.phone, username, user.email, user.role, user.contractor_id, hashed_pw, hashed_pw, user_id)
+    query = "UPDATE users SET name = %s, phone = %s, username = %s, email = %s, role = %s, contractor_id = %s, default_equipment = %s, password = %s, password_hash = %s, updated_at = NOW() WHERE id = %s"
+    values = (user.name, user.phone, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw, user_id)
     execute_query(query, values)
     return {"message": "User updated successfully!"}
 
@@ -115,7 +119,7 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         user = fetch_query("SELECT * FROM users WHERE email = %s", (email,))
         print(f"[INFO] Fetched user: {user}")
     except Exception as e:
-        print(f"[ERROR] Database connection error: {e}")
+        logger.error(f"Database connection error: {e}", exc_info=True)
         raise HTTPException(status_code=500, detail="Database connection error")
 
     if not user:
@@ -301,5 +305,131 @@ def change_password(
     except HTTPException:
         raise
     except Exception as e:
-        print(f"[ERROR] Failed to change password: {str(e)}")
+        logger.error(f"Failed to change password: {str(e)}", exc_info=True)
         return {"ok": False, "message": f"Failed to change password: {str(e)}"}
+
+class UpdateDefaultEquipmentRequest(BaseModel):
+    default_equipment: str
+
+@router.post("/api/update-default-equipment/")
+def update_default_equipment(
+    request: UpdateDefaultEquipmentRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Allow any authenticated user to update their own default equipment"""
+    user_id = int(current_user.get("sub"))
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    try:
+        execute_query(
+            "UPDATE users SET default_equipment = %s, updated_at = NOW() WHERE id = %s",
+            (request.default_equipment, user_id)
+        )
+
+        return {"ok": True, "message": "Default equipment updated successfully", "default_equipment": request.default_equipment}
+    except Exception as e:
+        logger.error(f"Failed to update default equipment: {str(e)}", exc_info=True)
+        return {"ok": False, "message": f"Failed to update default equipment: {str(e)}"}
+
+@router.get("/api/my-default-equipment/")
+def get_my_default_equipment(current_user: dict = Depends(get_current_user)):
+    """Get current user's default equipment"""
+    user_id = int(current_user.get("sub"))
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    try:
+        result = fetch_query("SELECT default_equipment FROM users WHERE id = %s", (user_id,))
+        if result:
+            return {"default_equipment": result[0].get('default_equipment')}
+        else:
+            raise HTTPException(status_code=404, detail="User not found")
+    except Exception as e:
+        logger.error(f"Failed to get default equipment: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to get default equipment: {str(e)}")
+
+@router.get("/verify-token")
+def verify_token(current_user: dict = Depends(get_current_user)):
+    """Verify token and return current user information"""
+    user_id = int(current_user.get("sub"))
+    role = current_user.get("role")
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    try:
+        result = fetch_query(
+            "SELECT id, name, email, phone, role, default_equipment, address FROM users WHERE id = %s",
+            (user_id,)
+        )
+        if not result:
+            raise HTTPException(status_code=404, detail="User not found")
+
+        user_data = result[0]
+        return {
+            "id": user_data.get("id"),
+            "name": user_data.get("name"),
+            "email": user_data.get("email"),
+            "phone_number": user_data.get("phone"),
+            "role": user_data.get("role"),
+            "default_equipment": user_data.get("default_equipment"),
+            "address": user_data.get("address")
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Failed to verify token: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to verify token: {str(e)}")
+
+class UpdateProfileRequest(BaseModel):
+    phone_number: str = None
+    address: str = None
+    default_equipment: str = None
+
+@router.put("/update-profile")
+def update_profile(
+    request: UpdateProfileRequest,
+    current_user: dict = Depends(get_current_user)
+):
+    """Allow any authenticated user to update their own profile"""
+    user_id = int(current_user.get("sub"))
+
+    if not user_id:
+        raise HTTPException(status_code=401, detail="User not authenticated")
+
+    try:
+        # Build update query dynamically based on provided fields
+        update_fields = []
+        values = []
+
+        if request.phone_number is not None:
+            update_fields.append("phone = %s")
+            values.append(request.phone_number)
+
+        if request.address is not None:
+            update_fields.append("address = %s")
+            values.append(request.address)
+
+        if request.default_equipment is not None:
+            update_fields.append("default_equipment = %s")
+            values.append(request.default_equipment)
+
+        if not update_fields:
+            return {"ok": True, "message": "No fields to update"}
+
+        # Add updated_at timestamp
+        update_fields.append("updated_at = NOW()")
+
+        # Add user_id to values
+        values.append(user_id)
+
+        query = f"UPDATE users SET {', '.join(update_fields)} WHERE id = %s"
+        execute_query(query, tuple(values))
+
+        return {"ok": True, "message": "Profile updated successfully"}
+    except Exception as e:
+        logger.error(f"Failed to update profile: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to update profile: {str(e)}")

@@ -2,6 +2,9 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from db import execute_query, fetch_query
 from auth import get_current_user
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 
 router = APIRouter()
 
@@ -34,7 +37,7 @@ def add_equipment_rate(equipment: EquipmentRate, current_user: dict = Depends(ge
         execute_query(query, (equipment.equipment_name, equipment.hourly_rate, equipment.description))
         return {"message": "Equipment rate added successfully!"}
     except Exception as e:
-        print(f"[ERROR] Failed to add equipment rate: {str(e)}")
+        logger.error(f"Failed to add equipment rate: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to add equipment rate: {str(e)}")
 
 @router.put("/equipment-rates/{equipment_id}")
@@ -48,7 +51,7 @@ def update_equipment_rate(equipment_id: int, equipment: EquipmentRate, current_u
         execute_query(query, (equipment.equipment_name, equipment.hourly_rate, equipment.description, equipment_id))
         return {"message": "Equipment rate updated successfully!"}
     except Exception as e:
-        print(f"[ERROR] Failed to update equipment rate: {str(e)}")
+        logger.error(f"Failed to update equipment rate: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update equipment rate: {str(e)}")
 
 @router.delete("/equipment-rates/{equipment_id}")
@@ -61,7 +64,7 @@ def delete_equipment_rate(equipment_id: int, current_user: dict = Depends(get_cu
         execute_query("DELETE FROM equipment_rates WHERE id = %s", (equipment_id,))
         return {"message": "Equipment rate deleted successfully!"}
     except Exception as e:
-        print(f"[ERROR] Failed to delete equipment rate: {str(e)}")
+        logger.error(f"Failed to delete equipment rate: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete equipment rate: {str(e)}")
 
 @router.get("/equipment-usage-report/")
