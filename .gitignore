@@ -42,6 +42,7 @@ env/
 
 # Logs
 *.log
+*.bak
 logs/
 
 # OS
@@ -57,3 +58,18 @@ app/data/exports/*
 # MCP specific
 *.mcp.log
 mcp_cache/
+
+# Build/test artifacts
+archive/
+last save/
+working testbed/
+contractor_portal_fresh/
+
+# GCP + Docker
+.gcloudignore
+.dockerignore
+Dockerfile
+Procfile
+
+# Optional: Exclude sensitive data folder
+data/

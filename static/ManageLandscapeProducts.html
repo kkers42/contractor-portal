@@ -1,0 +1,133 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <title>Manage Landscape Products</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            background-color: #1a1a1a;
+            color: #80ff80;
+            font-family: 'Courier New', monospace;
+            padding: 20px;
+        }
+        .container {
+            max-width: 600px;
+            margin: auto;
+            background-color: #000;
+            padding: 20px;
+            border-radius: 10px;
+            border: 1px solid #80ff80;
+        }
+        h2 {
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+        }
+        label, input, select, button {
+            display: block;
+            width: 100%;
+            margin: 10px 0;
+            padding: 8px;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-top: 20px;
+        }
+        th, td {
+            border: 1px solid #80ff80;
+            padding: 10px;
+            text-align: center;
+        }
+        th {
+            background-color: #111;
+        }
+    </style>
+</head>
+<body onload="checkAccess(['Admin']); loadProducts();">
+<div class="container">
+    <h2>Manage Landscape Products</h2>
+
+    <label for="productName">Product Name</label>
+    <input type="text" id="productName" placeholder="e.g., Mulch, Topsoil" required>
+
+    <label for="productUnit">Unit</label>
+    <input type="text" id="productUnit" placeholder="e.g., YARDS, BAGS, GALLONS" required>
+
+    <button onclick="addProduct()">Add Product</button>
+
+    <table id="productTable">
+        <thead>
+        <tr>
+            <th>ID</th>
+            <th>Product</th>
+            <th>Unit</th>
+        </tr>
+        </thead>
+        <tbody></tbody>
+    </table>
+</div>
+
+<script>
+    function checkAccess(roles) {
+        const token = localStorage.getItem('token');
+        if (!token) return location.href = "/static/login.html";
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        if (!roles.includes(payload.role)) {
+            alert("Access denied");
+            location.href = "/static/login.html";
+        }
+    }
+
+    async function loadProducts() {
+        try {
+            const response = await fetch(`${API_BASE_URL}/landscape-products/`);
+            const data = await response.json();
+            const tableBody = document.querySelector("#productTable tbody");
+            tableBody.innerHTML = "";
+            data.forEach(p => {
+                const row = `<tr><td>${p.id}</td><td>${p.name}</td><td>${p.unit}</td></tr>`;
+                tableBody.innerHTML += row;
+            });
+        } catch (err) {
+            console.error("Failed to load products:", err);
+        }
+    }
+
+    async function addProduct() {
+        const name = document.getElementById("productName").value;
+        const unit = document.getElementById("productUnit").value;
+
+        const formData = new FormData();
+        formData.append("name", name);
+        formData.append("unit", unit);
+
+        try {
+            const response = await fetch(`${API_BASE_URL}/landscape-products/`, {
+                method: "POST",
+                body: formData
+            });
+
+            if (!response.ok) {
+                throw new Error("Failed to add product");
+            }
+
+            alert("✅ Product added!");
+            loadProducts();
+        } catch (error) {
+            console.error("Error adding product:", error);
+            alert("❌ Could not add product.");
+        }
+    }
+</script>
+</body>
+</html>

@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <title>Reports</title>
+    <script src="/static/config.js"></script>
+    <style>
+        body {
+            font-family: 'Courier New', monospace;
+            background: #1a1a1a;
+            color: #80ff80;
+            padding: 20px;
+        }
+        .container {
+            background: #000;
+            padding: 20px;
+            border-radius: 8px;
+            max-width: 900px;
+            margin: auto;
+            box-shadow: 0 0 10px rgba(0,255,0,0.2);
+            border: 1px solid #80ff80;
+        }
+        h2 {
+            text-align: center;
+            border-bottom: 1px solid #80ff80;
+            padding-bottom: 10px;
+        }
+        label {
+            display: block;
+            margin-top: 10px;
+        }
+        select, input {
+            width: 100%;
+            padding: 10px;
+            margin-top: 5px;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+        }
+        input::placeholder {
+            color: #80ff80;
+            opacity: 0.6;
+        }
+        button {
+            margin-top: 15px;
+            padding: 10px 20px;
+            cursor: pointer;
+            background-color: #000;
+            color: #80ff80;
+            border: 1px solid #80ff80;
+            font-family: 'Courier New', monospace;
+        }
+        button:hover {
+            background-color: #004400;
+            border-color: #00cc00;
+        }
+        table {
+            width: 100%;
+            margin-top: 20px;
+            border-collapse: collapse;
+            background-color: #000;
+        }
+        th, td {
+            border: 1px solid #80ff80;
+            padding: 8px;
+            text-align: center;
+        }
+        th {
+            background-color: #111;
+        }
+    </style>
+</head>
+<body onload="checkAccess(['Admin', 'Manager', 'Subcontractor'])">
+    <div class="container">
+        <h2>Service & Product Reports</h2>
+
+        <label for="reportType">Report Type</label>
+        <select id="reportType">
+            <option value="product">By Product</option>
+            <option value="property">By Property</option>
+            <option value="user">By User</option>
+        </select>
+
+        <label for="startDate">Start Date</label>
+        <input type="date" id="startDate">
+
+        <label for="endDate">End Date</label>
+        <input type="date" id="endDate">
+
+        <label for="propertyId">Property ID (optional)</label>
+        <input type="number" id="propertyId">
+
+        <label for="userId">User ID (optional)</label>
+        <input type="number" id="userId">
+
+        <button onclick="generateReport()">Generate Report</button>
+        <button onclick="exportCSV()">Export CSV</button>
+        <button onclick="window.print()">Print</button>
+
+        <table id="reportTable">
+            <thead id="tableHead"></thead>
+            <tbody id="tableBody"></tbody>
+        </table>
+    </div>
+
+    <script>
+    function checkAccess(allowedRoles) {
+        const token = localStorage.getItem('token');
+        if (!token) {
+            window.location.href = '/static/login.html';
+            return;
+        }
+        const payload = JSON.parse(atob(token.split('.')[1]));
+        const role = payload.role;
+        if (!allowedRoles.includes(role)) {
+            alert("Access denied.");
+            window.location.href = '/static/login.html';
+        }
+    }
+
+    async function generateReport() {
+        const type = document.getElementById('reportType').value;
+        const start = document.getElementById('startDate').value;
+        const end = document.getElementById('endDate').value;
+        const propertyId = document.getElementById('propertyId').value;
+        const userId = document.getElementById('userId').value;
+
+        const token = localStorage.getItem('token');
+
+        const payload = {
+            start_date: start || null,
+            end_date: end || null
+        };
+
+        if (type === 'user' && userId) {
+            payload.user_id = parseInt(userId);
+        } else if (type === 'property' && propertyId) {
+            payload.property_id = parseInt(propertyId);
+        }
+
+
+        const response = await fetch(`${API_BASE_URL}/report/by-${type}/`, {
+            method: 'POST',
+            headers: {
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + token
+            },
+            body: JSON.stringify(payload)
+        });
+
+        const data = await response.json() || [];
+        if (!Array.isArray(data)) {
+            throw new Error("Invalid response structure");
+        }
+        renderTable(data);
+    }
+
+    function renderTable(data) {
+        const tableHead = document.getElementById('tableHead');
+        const tableBody = document.getElementById('tableBody');
+
+        tableHead.innerHTML = '';
+        tableBody.innerHTML = '';
+
+        if (!data.length) {
+            tableBody.innerHTML = '<tr><td colspan="10">No data found.</td></tr>';
+            return;
+        }
+
+        const headers = Object.keys(data[0]);
+        const headRow = `<tr>${headers.map(h => `<th>${h}</th>`).join('')}</tr>`;
+        tableHead.innerHTML = headRow;
+
+        data.forEach(row => {
+            const rowHTML = `<tr>${headers.map(h => `<td>${row[h]}</td>`).join('')}</tr>`;
+            tableBody.innerHTML += rowHTML;
+        });
+    }
+
+    function exportCSV() {
+        const rows = document.querySelectorAll('table tr');
+        let csv = '';
+        rows.forEach(row => {
+            const cols = row.querySelectorAll('td, th');
+            const values = Array.from(cols).map(col => `"${col.innerText}"`).join(',');
+            csv += values + '\n';
+        });
+
+        const blob = new Blob([csv], { type: 'text/csv' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = 'report.csv';
+        a.click();
+        URL.revokeObjectURL(url);
+    }
+    </script>
+</body>
+</html>
