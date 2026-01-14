@@ -18,6 +18,8 @@ class User(BaseModel):
     role: str
     password: str
     contractor_id: int = None  # For subcontractors, links to their contractor
+    address: str = None  # Optional address field
+    default_equipment: str = None  # Optional default equipment
     default_equipment: str = None  # Default equipment for this user
 
 @router.get("/users/")
@@ -25,7 +27,7 @@ def get_users(current_user: dict = Depends(get_current_user)):
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
     query = """
-        SELECT u.id, u.name, u.phone, u.email, u.role, u.status, u.contractor_id, u.default_equipment,
+        SELECT u.id, u.name, u.phone, u.address, u.email, u.role, u.status, u.contractor_id, u.default_equipment,
                c.name as contractor_name
         FROM users u
         LEFT JOIN users c ON u.contractor_id = c.id
@@ -56,8 +58,8 @@ def add_user(user: User, current_user: dict = Depends(get_current_user)):
         hashed_pw = hash_password(user.password)
         # Generate username from email
         username = user.email.split('@')[0]
-        query = "INSERT INTO users (name, phone, username, email, role, contractor_id, default_equipment, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, 'active')"
-        execute_query(query, (user.name, user.phone, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw))
+        query = "INSERT INTO users (name, phone, address, username, email, role, contractor_id, default_equipment, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active')"
+        execute_query(query, (user.name, user.phone, user.address, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw))
         return {"message": "User added successfully!"}
     except Exception as e:
         logger.error(f"Failed to add user: {str(e)}", exc_info=True)
@@ -69,8 +71,8 @@ def update_user(user_id: int, user: User, current_user: dict = Depends(get_curre
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
     hashed_pw = hash_password(user.password)
     username = user.email.split('@')[0]
-    query = "UPDATE users SET name = %s, phone = %s, username = %s, email = %s, role = %s, contractor_id = %s, default_equipment = %s, password = %s, password_hash = %s, updated_at = NOW() WHERE id = %s"
-    values = (user.name, user.phone, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw, user_id)
+    query = "UPDATE users SET name = %s, phone = %s, address = %s, username = %s, email = %s, role = %s, contractor_id = %s, default_equipment = %s, password = %s, password_hash = %s, updated_at = NOW() WHERE id = %s"
+    values = (user.name, user.phone, user.address, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw, user_id)
     execute_query(query, values)
     return {"message": "User updated successfully!"}
 
