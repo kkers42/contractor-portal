@@ -660,9 +660,10 @@
                 });
 
                 if (response.ok) {
-                    // Reload contractors and board
+                    // Reload contractors and board, then re-apply filters
                     await loadAllContractors();
                     await loadPropertyBoard();
+                    filterBoard(); // Preserve filter state after reload
                 } else {
                     const error = await response.json();
                     alert(`Failed to assign contractor: ${error.detail}`);
@@ -687,9 +688,10 @@
                 });
 
                 if (response.ok) {
-                    // Reload contractors and board
+                    // Reload contractors and board, then re-apply filters
                     await loadAllContractors();
                     await loadPropertyBoard();
+                    filterBoard(); // Preserve filter state after reload
                 } else {
                     const error = await response.json();
                     alert(`Failed to remove contractor: ${error.detail}`);
@@ -710,9 +712,10 @@
                 });
 
                 if (response.ok) {
-                    // Reload contractors and board
+                    // Reload contractors and board, then re-apply filters
                     await loadAllContractors();
                     await loadPropertyBoard();
+                    filterBoard(); // Preserve filter state after reload
                 } else {
                     const error = await response.json();
                     alert(`Failed to set primary contractor: ${error.detail}`);

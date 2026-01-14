@@ -3,6 +3,9 @@ from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from db import fetch_query, execute_query
 from auth import get_current_user
+from utils.logger import get_logger
+
+logger = get_logger(__name__)
 import pandas as pd
 from io import BytesIO
 
@@ -65,7 +68,7 @@ def add_property(property_data: PropertyData):
         execute_query(query, params)
         return {"message": "Property added successfully"}
     except Exception as e:
-        print(f"[ERROR] Failed to add property: {str(e)}")
+        logger.error(f"Failed to add property: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to add property: {str(e)}")
 
 @router.get("/properties/")
@@ -105,7 +108,7 @@ def update_property(property_data: PropertyUpdate):
         execute_query(query, params)
         return {"message": "Property updated successfully"}
     except Exception as e:
-        print(f"[ERROR] Failed to update property: {str(e)}")
+        logger.error(f"Failed to update property: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update property: {str(e)}")
 
 @router.delete("/delete-property/{property_id}")
@@ -115,7 +118,7 @@ def delete_property(property_id: int):
         execute_query(query, (property_id,))
         return {"message": "Property deleted successfully"}
     except Exception as e:
-        print(f"[ERROR] Failed to delete property: {str(e)}")
+        logger.error(f"Failed to delete property: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete property: {str(e)}")
 
 @router.post("/bulk-import-properties/")
@@ -303,7 +306,7 @@ def get_property_board(current_user: dict = Depends(get_current_user)):
 
         return properties
     except Exception as e:
-        print(f"[ERROR] Failed to fetch property board: {str(e)}")
+        logger.error(f"Failed to fetch property board: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch property board: {str(e)}")
 
 @router.get("/properties/{property_id}/contractors/")
@@ -328,7 +331,7 @@ def get_property_contractors(property_id: int, current_user: dict = Depends(get_
         contractors = fetch_query(query, (property_id,))
         return contractors if contractors else []
     except Exception as e:
-        print(f"[ERROR] Failed to fetch contractors for property: {str(e)}")
+        logger.error(f"Failed to fetch contractors for property: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to fetch contractors: {str(e)}")
 
 class PropertyContractorAssignment(BaseModel):
@@ -377,7 +380,7 @@ def assign_contractor_to_property(
         execute_query(query, (property_id, assignment.contractor_id, assignment.is_primary))
         return {"message": "Contractor assigned successfully"}
     except Exception as e:
-        print(f"[ERROR] Failed to assign contractor: {str(e)}")
+        logger.error(f"Failed to assign contractor: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to assign contractor: {str(e)}")
 
 @router.delete("/properties/{property_id}/contractors/{contractor_id}")
@@ -395,7 +398,7 @@ def remove_contractor_from_property(
         execute_query(query, (property_id, contractor_id))
         return {"message": "Contractor removed from property"}
     except Exception as e:
-        print(f"[ERROR] Failed to remove contractor: {str(e)}")
+        logger.error(f"Failed to remove contractor: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to remove contractor: {str(e)}")
 
 @router.put("/properties/{property_id}/contractors/{contractor_id}/primary")
@@ -423,7 +426,7 @@ def set_primary_contractor(
 
         return {"message": "Primary contractor updated"}
     except Exception as e:
-        print(f"[ERROR] Failed to set primary contractor: {str(e)}")
+        logger.error(f"Failed to set primary contractor: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to set primary contractor: {str(e)}")
 
 @router.get("/my-properties/")
@@ -437,6 +440,7 @@ def get_my_assigned_properties(current_user: dict = Depends(get_current_user)):
             pc.is_primary,
             (SELECT COUNT(*) FROM winter_ops_logs w
              WHERE w.property_id = l.id
+             AND w.user_id = %s
              AND w.time_out IS NULL
              AND DATE(w.time_in) = CURDATE()) as has_active_ticket
         FROM locations l
@@ -446,8 +450,8 @@ def get_my_assigned_properties(current_user: dict = Depends(get_current_user)):
     """
 
     try:
-        properties = fetch_query(query, (user_id,))
+        properties = fetch_query(query, (user_id, user_id))
         return properties if properties else []
     except Exception as e:
-        print(f"[ERROR] Failed to get user's properties: {str(e)}")
+        logger.error(f"Failed to get user's properties: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to get properties: {str(e)}")
