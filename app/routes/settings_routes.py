@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from db import fetch_query, execute_query
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from typing import Optional
 
 router = APIRouter()
@@ -16,7 +16,7 @@ class APIKeyUpdate(BaseModel):
     key_value: str
 
 @router.get("/settings/api-keys/")
-async def get_api_keys(current_user: dict = Depends(get_current_user)):
+async def get_api_keys(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get all API keys for current user (masked)"""
     user_id = int(current_user["sub"])
     user_role = current_user["role"]
@@ -34,10 +34,10 @@ async def get_api_keys(current_user: dict = Depends(get_current_user)):
                    user_id,
                    updated_at
             FROM api_keys
-            WHERE user_id IS NULL OR user_id = %s
+            WHERE customer_id = %s AND (user_id IS NULL OR user_id = %s)
             ORDER BY key_name
         """
-        keys = fetch_query(query, (user_id,))
+        keys = fetch_query(query, (customer_id, user_id))
     else:
         query = """
             SELECT key_name,
@@ -50,15 +50,15 @@ async def get_api_keys(current_user: dict = Depends(get_current_user)):
                    user_id,
                    updated_at
             FROM api_keys
-            WHERE user_id = %s
+            WHERE customer_id = %s AND user_id = %s
             ORDER BY key_name
         """
-        keys = fetch_query(query, (user_id,))
+        keys = fetch_query(query, (customer_id, user_id))
 
     return keys if keys else []
 
 @router.get("/settings/api-keys/{key_name}")
-async def get_api_key(key_name: str, current_user: dict = Depends(get_current_user)):
+async def get_api_key(key_name: str, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get a specific API key (returns actual value - use with caution)"""
     user_id = int(current_user["sub"])
     user_role = current_user["role"]
@@ -67,12 +67,12 @@ async def get_api_key(key_name: str, current_user: dict = Depends(get_current_us
     query = """
         SELECT key_value
         FROM api_keys
-        WHERE key_name = %s AND (user_id = %s OR (user_id IS NULL AND %s = 'Admin'))
+        WHERE customer_id = %s AND key_name = %s AND (user_id = %s OR (user_id IS NULL AND %s = 'Admin'))
         ORDER BY user_id DESC
         LIMIT 1
     """
 
-    result = fetch_query(query, (key_name, user_id, user_role))
+    result = fetch_query(query, (customer_id, key_name, user_id, user_role))
 
     if not result or not result[0]["key_value"]:
         return {"key_value": None, "is_configured": False}
@@ -80,7 +80,7 @@ async def get_api_key(key_name: str, current_user: dict = Depends(get_current_us
     return {"key_value": result[0]["key_value"], "is_configured": True}
 
 @router.post("/settings/api-keys/")
-async def set_api_key(setting: APIKeySetting, current_user: dict = Depends(get_current_user)):
+async def set_api_key(setting: APIKeySetting, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Set an API key"""
     user_id = int(current_user["sub"])
     user_role = current_user["role"]
@@ -95,48 +95,48 @@ async def set_api_key(setting: APIKeySetting, current_user: dict = Depends(get_c
     # Check if key exists
     check_query = """
         SELECT id FROM api_keys
-        WHERE key_name = %s AND user_id <=> %s
+        WHERE customer_id = %s AND key_name = %s AND user_id <=> %s
     """
-    existing = fetch_query(check_query, (setting.key_name, target_user_id))
+    existing = fetch_query(check_query, (customer_id, setting.key_name, target_user_id))
 
     if existing:
         # Update existing key
         update_query = """
             UPDATE api_keys
             SET key_value = %s, updated_at = NOW()
-            WHERE key_name = %s AND user_id <=> %s
+            WHERE customer_id = %s AND key_name = %s AND user_id <=> %s
         """
-        execute_query(update_query, (setting.key_value, setting.key_name, target_user_id))
+        execute_query(update_query, (setting.key_value, customer_id, setting.key_name, target_user_id))
         message = f"API key '{setting.key_name}' updated successfully"
     else:
         # Insert new key
         insert_query = """
-            INSERT INTO api_keys (key_name, key_value, user_id, updated_at)
-            VALUES (%s, %s, %s, NOW())
+            INSERT INTO api_keys (key_name, key_value, user_id, customer_id, updated_at)
+            VALUES (%s, %s, %s, %s, NOW())
         """
-        execute_query(insert_query, (setting.key_name, setting.key_value, target_user_id))
+        execute_query(insert_query, (setting.key_name, setting.key_value, target_user_id, customer_id))
         message = f"API key '{setting.key_name}' added successfully"
 
     return {"message": message, "key_name": setting.key_name}
 
 @router.delete("/settings/api-keys/{key_name}")
-async def delete_api_key(key_name: str, current_user: dict = Depends(get_current_user)):
+async def delete_api_key(key_name: str, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Delete an API key"""
     user_id = int(current_user["sub"])
     user_role = current_user["role"]
 
     # Users can only delete their own keys, admins can delete any
     if user_role == "Admin":
-        query = "DELETE FROM api_keys WHERE key_name = %s"
-        execute_query(query, (key_name,))
+        query = "DELETE FROM api_keys WHERE customer_id = %s AND key_name = %s"
+        execute_query(query, (customer_id, key_name))
     else:
-        query = "DELETE FROM api_keys WHERE key_name = %s AND user_id = %s"
-        execute_query(query, (key_name, user_id))
+        query = "DELETE FROM api_keys WHERE customer_id = %s AND key_name = %s AND user_id = %s"
+        execute_query(query, (customer_id, key_name, user_id))
 
     return {"message": f"API key '{key_name}' deleted successfully"}
 
 @router.get("/settings/available-integrations/")
-async def get_available_integrations(current_user: dict = Depends(get_current_user)):
+async def get_available_integrations(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get list of available integrations and their configuration status"""
 
     user_id = int(current_user["sub"])

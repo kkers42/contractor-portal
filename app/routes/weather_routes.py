@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from db import fetch_query, execute_query
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 import requests
 import os
 from datetime import datetime, timedelta
@@ -144,7 +144,8 @@ async def get_weather_forecast(
 
 @router.get("/weather/properties-forecast/")
 async def get_properties_weather_forecast(
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Get weather forecast for all properties with coordinates"""
 
@@ -154,9 +155,10 @@ async def get_properties_weather_forecast(
                area_manager, open_by_time
         FROM locations
         WHERE show_on_weather_dashboard = 1
+        AND customer_id = %s
     """
 
-    properties = fetch_query(query)
+    properties = fetch_query(query, (customer_id,))
 
     if not properties:
         return {"message": "No properties with coordinates found", "properties": []}

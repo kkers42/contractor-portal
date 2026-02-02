@@ -10,7 +10,7 @@ from typing import Optional
 import json
 import os
 from datetime import datetime
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -170,24 +170,39 @@ Respond ONLY with valid JSON, no other text."""
         }
 
 
-def get_or_create_conversation(phone_number: str, user_id: int = None):
+def get_or_create_conversation(phone_number: str, user_id: int = None, customer_id: int = None):
     """Get existing conversation or create new one"""
 
     # Try to find existing conversation
-    conv = fetch_query(
-        "SELECT * FROM sms_conversations WHERE phone_number = %s ORDER BY last_message_at DESC LIMIT 1",
-        (phone_number,)
-    )
+    if customer_id:
+        conv = fetch_query(
+            """SELECT sc.* FROM sms_conversations sc
+               JOIN users u ON sc.user_id = u.id
+               WHERE sc.phone_number = %s AND u.customer_id = %s
+               ORDER BY sc.last_message_at DESC LIMIT 1""",
+            (phone_number, customer_id)
+        )
+    else:
+        conv = fetch_query(
+            "SELECT * FROM sms_conversations WHERE phone_number = %s ORDER BY last_message_at DESC LIMIT 1",
+            (phone_number,)
+        )
 
     if conv:
         return conv[0]
 
     # Find user by phone number if user_id not provided
     if not user_id:
-        user = fetch_query(
-            "SELECT id FROM users WHERE phone_number = %s LIMIT 1",
-            (phone_number,)
-        )
+        if customer_id:
+            user = fetch_query(
+                "SELECT id FROM users WHERE phone_number = %s AND customer_id = %s LIMIT 1",
+                (phone_number, customer_id)
+            )
+        else:
+            user = fetch_query(
+                "SELECT id FROM users WHERE phone_number = %s LIMIT 1",
+                (phone_number,)
+            )
         if user:
             user_id = user[0]['id']
         else:
@@ -201,10 +216,19 @@ def get_or_create_conversation(phone_number: str, user_id: int = None):
         (user_id, phone_number)
     )
 
-    conv = fetch_query(
-        "SELECT * FROM sms_conversations WHERE phone_number = %s ORDER BY id DESC LIMIT 1",
-        (phone_number,)
-    )
+    if customer_id:
+        conv = fetch_query(
+            """SELECT sc.* FROM sms_conversations sc
+               JOIN users u ON sc.user_id = u.id
+               WHERE sc.phone_number = %s AND u.customer_id = %s
+               ORDER BY sc.id DESC LIMIT 1""",
+            (phone_number, customer_id)
+        )
+    else:
+        conv = fetch_query(
+            "SELECT * FROM sms_conversations WHERE phone_number = %s ORDER BY id DESC LIMIT 1",
+            (phone_number,)
+        )
     return conv[0] if conv else None
 
 
@@ -306,21 +330,33 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
     phone_number = conversation['phone_number']
     context_data = json.loads(conversation['context_data']) if conversation['context_data'] else {}
 
-    # Get user info
-    user = fetch_query("SELECT name, role FROM users WHERE id = %s", (user_id,))
+    # Get user info with customer_id
+    user = fetch_query("SELECT name, role, customer_id FROM users WHERE id = %s", (user_id,))
     user_name = user[0]['name'] if user else 'Unknown'
+    customer_id = user[0]['customer_id'] if user else None
 
     # START TICKET (also triggered by "OMW" or "ON MY WAY")
     if intent == 'start_ticket' or message_body.lower() in ['omw', 'on my way']:
         # Check if user has assigned properties
-        assigned = fetch_query(
-            """SELECT l.id, l.name, l.address
-               FROM locations l
-               JOIN property_contractors pc ON l.id = pc.property_id
-               WHERE pc.contractor_id = %s AND pc.acceptance_status = 'accepted'
-               LIMIT 5""",
-            (user_id,)
-        )
+        if customer_id:
+            assigned = fetch_query(
+                """SELECT l.id, l.name, l.address
+                   FROM locations l
+                   JOIN property_contractors pc ON l.id = pc.property_id
+                   WHERE pc.contractor_id = %s AND pc.acceptance_status = 'accepted'
+                   AND l.customer_id = %s
+                   LIMIT 5""",
+                (user_id, customer_id)
+            )
+        else:
+            assigned = fetch_query(
+                """SELECT l.id, l.name, l.address
+                   FROM locations l
+                   JOIN property_contractors pc ON l.id = pc.property_id
+                   WHERE pc.contractor_id = %s AND pc.acceptance_status = 'accepted'
+                   LIMIT 5""",
+                (user_id,)
+            )
 
         if not assigned:
             return "❌ You don't have any assigned properties. Please contact your manager."
@@ -514,14 +550,25 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
     # STATUS UPDATE COMMAND - Update check-in status
     elif message_body.lower() in ['working', 'busy', 'on site', 'servicing']:
         # Get active check-in
-        active_checkin = fetch_query(
-            """SELECT ec.id, we.event_name
-               FROM event_checkins ec
-               JOIN winter_events we ON ec.winter_event_id = we.id
-               WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
-               LIMIT 1""",
-            (user_id,)
-        )
+        if customer_id:
+            active_checkin = fetch_query(
+                """SELECT ec.id, we.event_name
+                   FROM event_checkins ec
+                   JOIN winter_events we ON ec.winter_event_id = we.id
+                   WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
+                   AND we.customer_id = %s
+                   LIMIT 1""",
+                (user_id, customer_id)
+            )
+        else:
+            active_checkin = fetch_query(
+                """SELECT ec.id, we.event_name
+                   FROM event_checkins ec
+                   JOIN winter_events we ON ec.winter_event_id = we.id
+                   WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
+                   LIMIT 1""",
+                (user_id,)
+            )
 
         if not active_checkin:
             return "❌ You're not checked in. Reply READY to check in for the active event first."
@@ -539,9 +586,15 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
     # CHECK-IN COMMAND - Check in for active event
     elif message_body.lower() in ['ready', 'checkin', 'check in', 'check-in', 'available']:
         # Get active winter event
-        active_event = fetch_query(
-            "SELECT id, event_name FROM winter_events WHERE status = 'active' LIMIT 1"
-        )
+        if customer_id:
+            active_event = fetch_query(
+                "SELECT id, event_name FROM winter_events WHERE status = 'active' AND customer_id = %s LIMIT 1",
+                (customer_id,)
+            )
+        else:
+            active_event = fetch_query(
+                "SELECT id, event_name FROM winter_events WHERE status = 'active' LIMIT 1"
+            )
 
         if not active_event:
             return "❌ No active snow event. Check-in is only available during active events."
@@ -551,16 +604,25 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
 
         # Get user's default equipment
         user_info = fetch_query(
-            "SELECT default_equipment FROM users WHERE id = %s",
+            "SELECT default_equipment, customer_id FROM users WHERE id = %s",
             (user_id,)
         )
         default_equipment = user_info[0].get('default_equipment') if user_info else None
 
         # Check if already checked in
-        existing_checkin = fetch_query(
-            "SELECT id, status FROM event_checkins WHERE winter_event_id = %s AND user_id = %s AND checked_out_at IS NULL",
-            (event_id, user_id)
-        )
+        if customer_id:
+            existing_checkin = fetch_query(
+                """SELECT ec.id, ec.status FROM event_checkins ec
+                   JOIN winter_events we ON ec.winter_event_id = we.id
+                   WHERE ec.winter_event_id = %s AND ec.user_id = %s
+                   AND ec.checked_out_at IS NULL AND we.customer_id = %s""",
+                (event_id, user_id, customer_id)
+            )
+        else:
+            existing_checkin = fetch_query(
+                "SELECT id, status FROM event_checkins WHERE winter_event_id = %s AND user_id = %s AND checked_out_at IS NULL",
+                (event_id, user_id)
+            )
 
         if existing_checkin:
             # Update existing check-in
@@ -583,14 +645,25 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
     # HOME COMMAND - Check out and mark user as unavailable
     elif message_body.lower() in ['home', 'off', 'offline']:
         # Check out from any active events
-        active_checkin = fetch_query(
-            """SELECT ec.id, we.event_name
-               FROM event_checkins ec
-               JOIN winter_events we ON ec.winter_event_id = we.id
-               WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
-               LIMIT 1""",
-            (user_id,)
-        )
+        if customer_id:
+            active_checkin = fetch_query(
+                """SELECT ec.id, we.event_name
+                   FROM event_checkins ec
+                   JOIN winter_events we ON ec.winter_event_id = we.id
+                   WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
+                   AND we.customer_id = %s
+                   LIMIT 1""",
+                (user_id, customer_id)
+            )
+        else:
+            active_checkin = fetch_query(
+                """SELECT ec.id, we.event_name
+                   FROM event_checkins ec
+                   JOIN winter_events we ON ec.winter_event_id = we.id
+                   WHERE ec.user_id = %s AND ec.checked_out_at IS NULL
+                   LIMIT 1""",
+                (user_id,)
+            )
 
         if active_checkin:
             execute_query(

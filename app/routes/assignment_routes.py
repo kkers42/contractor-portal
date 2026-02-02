@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,7 +23,10 @@ class AcceptanceAction(BaseModel):
 # ==================== PROPERTY ASSIGNMENTS ====================
 
 @router.get("/my-assignments/properties")
-def get_my_property_assignments(current_user: dict = Depends(get_current_user)):
+def get_my_property_assignments(
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     """
     Get all property assignments for the current user
     """
@@ -44,8 +47,9 @@ def get_my_property_assignments(current_user: dict = Depends(get_current_user)):
             l.address AS property_address,
             l.area_manager
         FROM property_contractors pc
-        JOIN locations l ON pc.property_id = l.id
+        JOIN locations l ON pc.property_id = l.id AND l.customer_id = %s
         WHERE pc.contractor_id = %s
+        AND pc.customer_id = %s
         ORDER BY
             CASE pc.acceptance_status
                 WHEN 'pending' THEN 1
@@ -55,7 +59,7 @@ def get_my_property_assignments(current_user: dict = Depends(get_current_user)):
             pc.assigned_date DESC
     """
 
-    assignments = fetch_query(query, (user_id,))
+    assignments = fetch_query(query, (customer_id, user_id, customer_id))
     return assignments if assignments else []
 
 
@@ -63,7 +67,8 @@ def get_my_property_assignments(current_user: dict = Depends(get_current_user)):
 def accept_property_assignment(
     assignment_id: int,
     action: AcceptanceAction,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Accept a property assignment
@@ -72,8 +77,8 @@ def accept_property_assignment(
 
     # Verify assignment belongs to current user
     assignment = fetch_query(
-        "SELECT * FROM property_contractors WHERE id = %s AND contractor_id = %s",
-        (assignment_id, user_id)
+        "SELECT * FROM property_contractors WHERE id = %s AND contractor_id = %s AND customer_id = %s",
+        (assignment_id, user_id, customer_id)
     )
 
     if not assignment:
@@ -94,8 +99,8 @@ def accept_property_assignment(
            SET acceptance_status = 'accepted',
                accepted_at = NOW(),
                notes = CASE WHEN %s IS NOT NULL THEN CONCAT(COALESCE(notes, ''), '\n[Accepted] ', %s) ELSE notes END
-           WHERE id = %s""",
-        (action.notes, action.notes, assignment_id)
+           WHERE id = %s AND customer_id = %s""",
+        (action.notes, action.notes, assignment_id, customer_id)
     )
 
     # Log to assignment history
@@ -113,7 +118,8 @@ def accept_property_assignment(
 def decline_property_assignment(
     assignment_id: int,
     action: AcceptanceAction,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Decline a property assignment
@@ -122,8 +128,8 @@ def decline_property_assignment(
 
     # Verify assignment belongs to current user
     assignment = fetch_query(
-        "SELECT * FROM property_contractors WHERE id = %s AND contractor_id = %s",
-        (assignment_id, user_id)
+        "SELECT * FROM property_contractors WHERE id = %s AND contractor_id = %s AND customer_id = %s",
+        (assignment_id, user_id, customer_id)
     )
 
     if not assignment:
@@ -144,8 +150,8 @@ def decline_property_assignment(
            SET acceptance_status = 'declined',
                declined_at = NOW(),
                notes = CASE WHEN %s IS NOT NULL THEN CONCAT(COALESCE(notes, ''), '\n[Declined] ', %s) ELSE notes END
-           WHERE id = %s""",
-        (action.notes, action.notes, assignment_id)
+           WHERE id = %s AND customer_id = %s""",
+        (action.notes, action.notes, assignment_id, customer_id)
     )
 
     # Log to assignment history
@@ -162,7 +168,10 @@ def decline_property_assignment(
 # ==================== ROUTE ASSIGNMENTS ====================
 
 @router.get("/my-assignments/routes")
-def get_my_route_assignments(current_user: dict = Depends(get_current_user)):
+def get_my_route_assignments(
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     """
     Get all route assignments for the current user
     """
@@ -185,7 +194,7 @@ def get_my_route_assignments(current_user: dict = Depends(get_current_user)):
             CASE WHEN ra.current_property_id IS NOT NULL THEN l.name ELSE NULL END AS current_property_name
         FROM route_assignments ra
         JOIN routes r ON ra.route_id = r.id
-        LEFT JOIN locations l ON ra.current_property_id = l.id
+        LEFT JOIN locations l ON ra.current_property_id = l.id AND l.customer_id = %s
         WHERE ra.user_id = %s
         ORDER BY
             CASE ra.acceptance_status
@@ -196,7 +205,7 @@ def get_my_route_assignments(current_user: dict = Depends(get_current_user)):
             ra.assigned_at DESC
     """
 
-    assignments = fetch_query(query, (user_id,))
+    assignments = fetch_query(query, (customer_id, user_id))
     return assignments if assignments else []
 
 
@@ -302,7 +311,8 @@ def decline_route_assignment(
 def start_route_property(
     assignment_id: int,
     property_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Start working on a specific property in a route
@@ -326,8 +336,8 @@ def start_route_property(
     # Check if already working on a property
     if assignment[0]['current_property_id'] is not None:
         current_prop = fetch_query(
-            "SELECT name FROM locations WHERE id = %s",
-            (assignment[0]['current_property_id'],)
+            "SELECT name FROM locations WHERE id = %s AND customer_id = %s",
+            (assignment[0]['current_property_id'], customer_id)
         )
         raise HTTPException(
             status_code=400,
@@ -374,7 +384,8 @@ def start_route_property(
 @router.post("/assignments/route/{assignment_id}/complete-property")
 def complete_route_property(
     assignment_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Mark current property as complete
@@ -437,7 +448,8 @@ class PropertyListAssignmentRequest(BaseModel):
 @router.post("/ai-assign-property-list")
 async def ai_assign_property_list(
     request: PropertyListAssignmentRequest,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     AI-powered property list assignment with sidewalk/non-sidewalk crew validation
@@ -452,8 +464,8 @@ async def ai_assign_property_list(
         """SELECT l.id, l.name, l.address
            FROM locations l
            JOIN property_lists_properties plp ON l.id = plp.property_id
-           WHERE plp.list_id = %s""",
-        (request.property_list_id,)
+           WHERE plp.list_id = %s AND l.customer_id = %s""",
+        (request.property_list_id, customer_id)
     )
 
     if not properties:
@@ -471,7 +483,9 @@ async def ai_assign_property_list(
         WHERE u.status = 'active'
           AND u.available_for_assignment = TRUE
           AND u.role IN ('Contractor', 'Subcontractor', 'User')
-        ORDER BY u.id"""
+          AND u.customer_id = %s
+        ORDER BY u.id""",
+        (customer_id,)
     )
 
     if not available_contractors:

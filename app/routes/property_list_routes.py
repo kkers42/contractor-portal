@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from db import fetch_query, execute_query
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 
 router = APIRouter()
 
@@ -22,7 +22,7 @@ class AddPropertyToList(BaseModel):
     property_id: int
 
 @router.get("/property-lists/")
-async def get_property_lists(current_user: dict = Depends(get_current_user)):
+async def get_property_lists(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get all property lists for current user"""
     user_id = int(current_user["sub"])
 
@@ -31,22 +31,27 @@ async def get_property_lists(current_user: dict = Depends(get_current_user)):
         SELECT pl.*, u.name as owner_name
         FROM property_lists pl
         JOIN users u ON pl.user_id = u.id
-        WHERE pl.user_id = %s OR pl.is_shared = TRUE
+        WHERE pl.customer_id = %s AND (pl.user_id = %s OR pl.is_shared = TRUE)
         ORDER BY pl.created_at DESC
     """
 
-    lists = fetch_query(query, (user_id,))
+    lists = fetch_query(query, (customer_id, user_id))
 
     # Get property count for each list
     for lst in lists:
-        count_query = "SELECT COUNT(*) as count FROM property_list_items WHERE list_id = %s"
-        count_result = fetch_query(count_query, (lst["id"],))
+        count_query = """
+            SELECT COUNT(*) as count
+            FROM property_list_items pli
+            JOIN locations l ON pli.property_id = l.id
+            WHERE pli.list_id = %s AND l.customer_id = %s
+        """
+        count_result = fetch_query(count_query, (lst["id"], customer_id))
         lst["property_count"] = count_result[0]["count"] if count_result else 0
 
     return lists
 
 @router.get("/property-lists/{list_id}")
-async def get_property_list(list_id: int, current_user: dict = Depends(get_current_user)):
+async def get_property_list(list_id: int, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get a specific property list with its properties"""
     user_id = int(current_user["sub"])
 
@@ -55,9 +60,9 @@ async def get_property_list(list_id: int, current_user: dict = Depends(get_curre
         SELECT pl.*, u.name as owner_name
         FROM property_lists pl
         JOIN users u ON pl.user_id = u.id
-        WHERE pl.id = %s AND (pl.user_id = %s OR pl.is_shared = TRUE)
+        WHERE pl.id = %s AND pl.customer_id = %s AND (pl.user_id = %s OR pl.is_shared = TRUE)
     """
-    lists = fetch_query(query, (list_id, user_id))
+    lists = fetch_query(query, (list_id, customer_id, user_id))
 
     if not lists:
         raise HTTPException(status_code=404, detail="Property list not found")
@@ -69,10 +74,10 @@ async def get_property_list(list_id: int, current_user: dict = Depends(get_curre
         SELECT l.*, pli.added_at
         FROM locations l
         JOIN property_list_items pli ON l.id = pli.property_id
-        WHERE pli.list_id = %s
+        WHERE pli.list_id = %s AND l.customer_id = %s
         ORDER BY pli.added_at DESC
     """
-    properties = fetch_query(properties_query, (list_id,))
+    properties = fetch_query(properties_query, (list_id, customer_id))
     property_list["properties"] = properties
 
     return property_list
@@ -80,7 +85,8 @@ async def get_property_list(list_id: int, current_user: dict = Depends(get_curre
 @router.post("/property-lists/")
 async def create_property_list(
     list_data: PropertyListCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Create a new property list"""
     user_id = int(current_user["sub"])
@@ -92,15 +98,16 @@ async def create_property_list(
         filters_json = json.dumps(list_data.filters)
 
     query = """
-        INSERT INTO property_lists (name, user_id, is_shared, filters)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO property_lists (name, user_id, is_shared, filters, customer_id)
+        VALUES (%s, %s, %s, %s, %s)
     """
 
     list_id = execute_query(query, (
         list_data.name,
         user_id,
         list_data.is_shared,
-        filters_json
+        filters_json,
+        customer_id
     ))
 
     return {
@@ -111,14 +118,15 @@ async def create_property_list(
 @router.put("/property-lists/")
 async def update_property_list(
     list_data: PropertyListUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Update a property list"""
     user_id = int(current_user["sub"])
 
     # Verify ownership
-    check_query = "SELECT user_id FROM property_lists WHERE id = %s"
-    result = fetch_query(check_query, (list_data.id,))
+    check_query = "SELECT user_id FROM property_lists WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (list_data.id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Property list not found")
@@ -135,26 +143,27 @@ async def update_property_list(
     query = """
         UPDATE property_lists
         SET name = %s, is_shared = %s, filters = %s
-        WHERE id = %s
+        WHERE id = %s AND customer_id = %s
     """
 
     execute_query(query, (
         list_data.name,
         list_data.is_shared,
         filters_json,
-        list_data.id
+        list_data.id,
+        customer_id
     ))
 
     return {"message": "Property list updated successfully"}
 
 @router.delete("/property-lists/{list_id}")
-async def delete_property_list(list_id: int, current_user: dict = Depends(get_current_user)):
+async def delete_property_list(list_id: int, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Delete a property list"""
     user_id = int(current_user["sub"])
 
     # Verify ownership
-    check_query = "SELECT user_id FROM property_lists WHERE id = %s"
-    result = fetch_query(check_query, (list_id,))
+    check_query = "SELECT user_id FROM property_lists WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (list_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Property list not found")
@@ -163,8 +172,8 @@ async def delete_property_list(list_id: int, current_user: dict = Depends(get_cu
         raise HTTPException(status_code=403, detail="Not authorized to delete this list")
 
     # Delete the list (cascade will delete items)
-    query = "DELETE FROM property_lists WHERE id = %s"
-    execute_query(query, (list_id,))
+    query = "DELETE FROM property_lists WHERE id = %s AND customer_id = %s"
+    execute_query(query, (list_id, customer_id))
 
     return {"message": "Property list deleted successfully"}
 

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from db import execute_query, fetch_query
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -14,10 +14,10 @@ class EquipmentRate(BaseModel):
     description: str | None = None
 
 @router.get("/equipment-rates/")
-def get_equipment_rates(current_user: dict = Depends(get_current_user)):
+def get_equipment_rates(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get all equipment with their hourly rates (pricing hidden for Subcontractors)"""
-    query = "SELECT id, equipment_name, hourly_rate, description FROM equipment_rates ORDER BY equipment_name"
-    rates = fetch_query(query)
+    query = "SELECT id, equipment_name, hourly_rate, description FROM equipment_rates WHERE customer_id = %s ORDER BY equipment_name"
+    rates = fetch_query(query, (customer_id,))
     
     # Hide pricing information for Subcontractors and Users
     if rates and current_user["role"] in ["Subcontractor", "User"]:
@@ -27,41 +27,41 @@ def get_equipment_rates(current_user: dict = Depends(get_current_user)):
     return rates if rates else []
 
 @router.post("/equipment-rates/")
-def add_equipment_rate(equipment: EquipmentRate, current_user: dict = Depends(get_current_user)):
+def add_equipment_rate(equipment: EquipmentRate, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Add new equipment with hourly rate (Manager/Admin only)"""
     if current_user["role"] not in ["Admin", "Manager"]:
         raise HTTPException(status_code=403, detail="Managers and Admins only!")
 
     try:
-        query = "INSERT INTO equipment_rates (equipment_name, hourly_rate, description) VALUES (%s, %s, %s)"
-        execute_query(query, (equipment.equipment_name, equipment.hourly_rate, equipment.description))
+        query = "INSERT INTO equipment_rates (equipment_name, hourly_rate, description, customer_id) VALUES (%s, %s, %s, %s)"
+        execute_query(query, (equipment.equipment_name, equipment.hourly_rate, equipment.description, customer_id))
         return {"message": "Equipment rate added successfully!"}
     except Exception as e:
         logger.error(f"Failed to add equipment rate: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to add equipment rate: {str(e)}")
 
 @router.put("/equipment-rates/{equipment_id}")
-def update_equipment_rate(equipment_id: int, equipment: EquipmentRate, current_user: dict = Depends(get_current_user)):
+def update_equipment_rate(equipment_id: int, equipment: EquipmentRate, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Update equipment hourly rate (Manager/Admin only)"""
     if current_user["role"] not in ["Admin", "Manager"]:
         raise HTTPException(status_code=403, detail="Managers and Admins only!")
 
     try:
-        query = "UPDATE equipment_rates SET equipment_name = %s, hourly_rate = %s, description = %s WHERE id = %s"
-        execute_query(query, (equipment.equipment_name, equipment.hourly_rate, equipment.description, equipment_id))
+        query = "UPDATE equipment_rates SET equipment_name = %s, hourly_rate = %s, description = %s WHERE id = %s AND customer_id = %s"
+        execute_query(query, (equipment.equipment_name, equipment.hourly_rate, equipment.description, equipment_id, customer_id))
         return {"message": "Equipment rate updated successfully!"}
     except Exception as e:
         logger.error(f"Failed to update equipment rate: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to update equipment rate: {str(e)}")
 
 @router.delete("/equipment-rates/{equipment_id}")
-def delete_equipment_rate(equipment_id: int, current_user: dict = Depends(get_current_user)):
+def delete_equipment_rate(equipment_id: int, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Delete equipment rate (Admin only)"""
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=403, detail="Admins only!")
 
     try:
-        execute_query("DELETE FROM equipment_rates WHERE id = %s", (equipment_id,))
+        execute_query("DELETE FROM equipment_rates WHERE id = %s AND customer_id = %s", (equipment_id, customer_id))
         return {"message": "Equipment rate deleted successfully!"}
     except Exception as e:
         logger.error(f"Failed to delete equipment rate: {str(e)}", exc_info=True)
@@ -73,11 +73,12 @@ def get_equipment_usage_report(
     end_date: str = None,
     contractor_id: int = None,
     property_id: int = None,
-    equipment_name: str = None
+    equipment_name: str = None,
+    customer_id: str = Depends(get_customer_id)
 ):
     """Get equipment usage report with hours and costs"""
-    where_parts = []
-    params = []
+    where_parts = ["w.customer_id = %s"]
+    params = [customer_id]
 
     if start_date and end_date:
         where_parts.append("w.time_in BETWEEN %s AND %s")
@@ -95,7 +96,7 @@ def get_equipment_usage_report(
         where_parts.append("w.equipment = %s")
         params.append(equipment_name)
 
-    where_clause = "WHERE " + " AND ".join(where_parts) if where_parts else ""
+    where_clause = "WHERE " + " AND ".join(where_parts)
 
     query = f"""
         SELECT

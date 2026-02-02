@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from db import fetch_query, execute_query
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 
 router = APIRouter()
 
@@ -33,7 +33,10 @@ class RouteAssignUsers(BaseModel):
     user_ids: List[int]
 
 @router.get("/routes/")
-async def get_routes(current_user: dict = Depends(get_current_user)):
+async def get_routes(
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     """Get all routes for current user"""
     user_id = int(current_user["sub"])
 
@@ -42,15 +45,19 @@ async def get_routes(current_user: dict = Depends(get_current_user)):
                (SELECT COUNT(*) FROM route_properties WHERE route_id = r.id) as property_count
         FROM routes r
         JOIN users u ON r.user_id = u.id
-        WHERE r.user_id = %s
+        WHERE r.user_id = %s AND r.customer_id = %s
         ORDER BY r.created_at DESC
     """
 
-    routes = fetch_query(query, (user_id,))
+    routes = fetch_query(query, (user_id, customer_id))
     return routes
 
 @router.get("/routes/{route_id}")
-async def get_route(route_id: int, current_user: dict = Depends(get_current_user)):
+async def get_route(
+    route_id: int,
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     """Get a specific route with its properties"""
     user_id = int(current_user["sub"])
 
@@ -59,9 +66,9 @@ async def get_route(route_id: int, current_user: dict = Depends(get_current_user
         SELECT r.*, u.name as owner_name
         FROM routes r
         JOIN users u ON r.user_id = u.id
-        WHERE r.id = %s AND r.user_id = %s
+        WHERE r.id = %s AND r.user_id = %s AND r.customer_id = %s
     """
-    routes = fetch_query(query, (route_id, user_id))
+    routes = fetch_query(query, (route_id, user_id, customer_id))
 
     if not routes:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -73,10 +80,10 @@ async def get_route(route_id: int, current_user: dict = Depends(get_current_user
         SELECT l.*, rp.sequence_order, rp.estimated_time_minutes, rp.notes
         FROM locations l
         JOIN route_properties rp ON l.id = rp.property_id
-        WHERE rp.route_id = %s
+        WHERE rp.route_id = %s AND l.customer_id = %s
         ORDER BY rp.sequence_order ASC
     """
-    properties = fetch_query(properties_query, (route_id,))
+    properties = fetch_query(properties_query, (route_id, customer_id))
     route["properties"] = properties
 
     return route
@@ -84,21 +91,23 @@ async def get_route(route_id: int, current_user: dict = Depends(get_current_user
 @router.post("/routes/")
 async def create_route(
     route_data: RouteCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Create a new route"""
     user_id = int(current_user["sub"])
 
     query = """
-        INSERT INTO routes (name, description, user_id, is_template)
-        VALUES (%s, %s, %s, %s)
+        INSERT INTO routes (name, description, user_id, is_template, customer_id)
+        VALUES (%s, %s, %s, %s, %s)
     """
 
     route_id = execute_query(query, (
         route_data.name,
         route_data.description,
         user_id,
-        route_data.is_template
+        route_data.is_template,
+        customer_id
     ))
 
     return {
@@ -109,14 +118,15 @@ async def create_route(
 @router.put("/routes/")
 async def update_route(
     route_data: RouteUpdate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Update a route"""
     user_id = int(current_user["sub"])
 
     # Verify ownership
-    check_query = "SELECT user_id FROM routes WHERE id = %s"
-    result = fetch_query(check_query, (route_data.id,))
+    check_query = "SELECT user_id FROM routes WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (route_data.id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -127,26 +137,31 @@ async def update_route(
     query = """
         UPDATE routes
         SET name = %s, description = %s, is_template = %s
-        WHERE id = %s
+        WHERE id = %s AND customer_id = %s
     """
 
     execute_query(query, (
         route_data.name,
         route_data.description,
         route_data.is_template,
-        route_data.id
+        route_data.id,
+        customer_id
     ))
 
     return {"message": "Route updated successfully"}
 
 @router.delete("/routes/{route_id}")
-async def delete_route(route_id: int, current_user: dict = Depends(get_current_user)):
+async def delete_route(
+    route_id: int,
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     """Delete a route"""
     user_id = int(current_user["sub"])
 
     # Verify ownership
-    check_query = "SELECT user_id FROM routes WHERE id = %s"
-    result = fetch_query(check_query, (route_id,))
+    check_query = "SELECT user_id FROM routes WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (route_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -155,22 +170,23 @@ async def delete_route(route_id: int, current_user: dict = Depends(get_current_u
         raise HTTPException(status_code=403, detail="Not authorized to delete this route")
 
     # Delete the route (cascade will delete route_properties)
-    query = "DELETE FROM routes WHERE id = %s"
-    execute_query(query, (route_id,))
+    query = "DELETE FROM routes WHERE id = %s AND customer_id = %s"
+    execute_query(query, (route_id, customer_id))
 
     return {"message": "Route deleted successfully"}
 
 @router.post("/routes/add-property/")
 async def add_property_to_route(
     data: RoutePropertyAdd,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Add a property to a route"""
     user_id = int(current_user["sub"])
 
     # Verify route ownership
-    check_query = "SELECT user_id FROM routes WHERE id = %s"
-    result = fetch_query(check_query, (data.route_id,))
+    check_query = "SELECT user_id FROM routes WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (data.route_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -179,8 +195,8 @@ async def add_property_to_route(
         raise HTTPException(status_code=403, detail="Not authorized to modify this route")
 
     # Check if property exists
-    prop_check = "SELECT id FROM locations WHERE id = %s"
-    prop_result = fetch_query(prop_check, (data.property_id,))
+    prop_check = "SELECT id FROM locations WHERE id = %s AND customer_id = %s"
+    prop_result = fetch_query(prop_check, (data.property_id, customer_id))
 
     if not prop_result:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -209,14 +225,15 @@ async def add_property_to_route(
 async def remove_property_from_route(
     route_id: int,
     property_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Remove a property from a route"""
     user_id = int(current_user["sub"])
 
     # Verify route ownership
-    check_query = "SELECT user_id FROM routes WHERE id = %s"
-    result = fetch_query(check_query, (route_id,))
+    check_query = "SELECT user_id FROM routes WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (route_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -233,14 +250,15 @@ async def remove_property_from_route(
 @router.put("/routes/reorder/")
 async def reorder_route_properties(
     data: RoutePropertyReorder,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Reorder properties in a route"""
     user_id = int(current_user["sub"])
 
     # Verify route ownership
-    check_query = "SELECT user_id FROM routes WHERE id = %s"
-    result = fetch_query(check_query, (data.route_id,))
+    check_query = "SELECT user_id FROM routes WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (data.route_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -266,14 +284,15 @@ async def reorder_route_properties(
 @router.post("/routes/assign-users/")
 async def assign_users_to_route(
     data: RouteAssignUsers,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Assign users to a route"""
     user_id = int(current_user["sub"])
 
     # Verify route ownership
-    check_query = "SELECT user_id FROM routes WHERE id = %s"
-    result = fetch_query(check_query, (data.route_id,))
+    check_query = "SELECT user_id FROM routes WHERE id = %s AND customer_id = %s"
+    result = fetch_query(check_query, (data.route_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")

@@ -8,13 +8,13 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from db import fetch_query, execute_query
 
 router = APIRouter()
 
 
-def reassign_logs_to_event(event_id: int, start_date: str, end_date: Optional[str]):
+def reassign_logs_to_event(event_id: int, start_date: str, end_date: Optional[str], customer_id: str):
     """
     Helper function to reassign logs to a specific event based on timestamp matching
     This ensures logs that fall within an event's timeframe are automatically assigned
@@ -27,8 +27,9 @@ def reassign_logs_to_event(event_id: int, start_date: str, end_date: Optional[st
                    SET winter_event_id = %s
                    WHERE time_in >= %s
                      AND time_in <= %s
+                     AND customer_id = %s
                      AND (winter_event_id IS NULL OR winter_event_id != %s)""",
-                (event_id, start_date, end_date, event_id)
+                (event_id, start_date, end_date, customer_id, event_id)
             )
         else:
             # Event is ongoing - assign logs from start_date onward
@@ -36,8 +37,9 @@ def reassign_logs_to_event(event_id: int, start_date: str, end_date: Optional[st
                 """UPDATE winter_ops_logs
                    SET winter_event_id = %s
                    WHERE time_in >= %s
+                     AND customer_id = %s
                      AND (winter_event_id IS NULL OR winter_event_id != %s)""",
-                (event_id, start_date, event_id)
+                (event_id, start_date, customer_id, event_id)
             )
     except Exception as e:
         print(f"[WARNING] Failed to reassign logs to event {event_id}: {str(e)}")
@@ -55,7 +57,10 @@ class WinterEventComplete(BaseModel):
 
 
 @router.get("/winter-events/")
-def get_winter_events(current_user: dict = Depends(get_current_user)):
+def get_winter_events(
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     """
     Get all winter events
     Accessible by Admins and Managers
@@ -71,39 +76,45 @@ def get_winter_events(current_user: dict = Depends(get_current_user)):
         SELECT
             we.*,
             u.name as created_by_name,
-            (SELECT COUNT(*) FROM winter_ops_logs WHERE winter_event_id = we.id) as log_count,
-            (SELECT COUNT(DISTINCT property_id) FROM winter_ops_logs WHERE winter_event_id = we.id) as property_count
+            (SELECT COUNT(*) FROM winter_ops_logs WHERE winter_event_id = we.id AND customer_id = %s) as log_count,
+            (SELECT COUNT(DISTINCT property_id) FROM winter_ops_logs WHERE winter_event_id = we.id AND customer_id = %s) as property_count
         FROM winter_events we
-        LEFT JOIN users u ON we.created_by = u.id
+        LEFT JOIN users u ON we.created_by = u.id AND u.customer_id = %s
+        WHERE we.customer_id = %s
         ORDER BY we.start_date DESC
     """
 
-    events = fetch_query(query)
+    events = fetch_query(query, (customer_id, customer_id, customer_id, customer_id))
     return events if events else []
 
 
 @router.get("/winter-events/active")
-def get_active_winter_event(current_user: dict = Depends(get_current_user)):
+def get_active_winter_event(
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     """
     Get the currently active winter event (if any)
     """
     query = """
         SELECT
             we.*,
-            (SELECT COUNT(*) FROM winter_ops_logs WHERE winter_event_id = we.id) as log_count
+            (SELECT COUNT(*) FROM winter_ops_logs WHERE winter_event_id = we.id AND customer_id = %s) as log_count
         FROM winter_events we
         WHERE we.status = 'active'
+          AND we.customer_id = %s
         LIMIT 1
     """
 
-    event = fetch_query(query)
+    event = fetch_query(query, (customer_id, customer_id))
     return event[0] if event else None
 
 
 @router.get("/winter-events/{event_id}")
 def get_winter_event(
     event_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Get a specific winter event by ID
@@ -118,14 +129,15 @@ def get_winter_event(
         SELECT
             we.*,
             u.full_name as created_by_name,
-            (SELECT COUNT(*) FROM winter_ops_logs WHERE winter_event_id = we.id) as log_count,
-            (SELECT COUNT(DISTINCT location_id) FROM winter_ops_logs WHERE winter_event_id = we.id) as property_count
+            (SELECT COUNT(*) FROM winter_ops_logs WHERE winter_event_id = we.id AND customer_id = %s) as log_count,
+            (SELECT COUNT(DISTINCT location_id) FROM winter_ops_logs WHERE winter_event_id = we.id AND customer_id = %s) as property_count
         FROM winter_events we
-        LEFT JOIN users u ON we.created_by = u.id
+        LEFT JOIN users u ON we.created_by = u.id AND u.customer_id = %s
         WHERE we.id = %s
+          AND we.customer_id = %s
     """
 
-    event = fetch_query(query, (event_id,))
+    event = fetch_query(query, (customer_id, customer_id, customer_id, event_id, customer_id))
 
     if not event:
         raise HTTPException(status_code=404, detail="Winter event not found")
@@ -136,7 +148,8 @@ def get_winter_event(
 @router.post("/winter-events/")
 def create_winter_event(
     event_data: WinterEventCreate,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Start a new winter event
@@ -150,7 +163,8 @@ def create_winter_event(
 
     # Check if there's already an active event
     active_check = fetch_query(
-        "SELECT id, event_name FROM winter_events WHERE status = 'active'"
+        "SELECT id, event_name FROM winter_events WHERE status = 'active' AND customer_id = %s",
+        (customer_id,)
     )
 
     if active_check:
@@ -163,8 +177,8 @@ def create_winter_event(
     query = """
         INSERT INTO winter_events (
             event_name, description, start_date,
-            status, created_by
-        ) VALUES (%s, %s, %s, 'active', %s)
+            status, created_by, customer_id
+        ) VALUES (%s, %s, %s, 'active', %s, %s)
     """
 
     try:
@@ -174,12 +188,13 @@ def create_winter_event(
                 event_data.event_name,
                 event_data.description,
                 event_data.start_date,
-                current_user.get("user_id")
+                current_user.get("user_id"),
+                customer_id
             )
         )
 
         # Automatically assign any existing logs that fall within this event's timeframe
-        reassign_logs_to_event(event_id, event_data.start_date, None)
+        reassign_logs_to_event(event_id, event_data.start_date, None, customer_id)
 
         return {
             "message": "Winter event started successfully",
@@ -198,7 +213,8 @@ def create_winter_event(
 def complete_winter_event(
     event_id: int,
     complete_data: WinterEventComplete,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     End/complete a winter event
@@ -212,8 +228,8 @@ def complete_winter_event(
 
     # Check if event exists and is active
     event = fetch_query(
-        "SELECT id, event_name, status FROM winter_events WHERE id = %s",
-        (event_id,)
+        "SELECT id, event_name, status, start_date FROM winter_events WHERE id = %s AND customer_id = %s",
+        (event_id, customer_id)
     )
 
     if not event:
@@ -232,13 +248,14 @@ def complete_winter_event(
             end_date = %s,
             completed_at = NOW()
         WHERE id = %s
+          AND customer_id = %s
     """
 
     try:
-        execute_query(query, (complete_data.end_date, event_id))
+        execute_query(query, (complete_data.end_date, event_id, customer_id))
 
         # Reassign logs to ensure they're correctly assigned with the new end_date
-        reassign_logs_to_event(event_id, event[0]['start_date'], complete_data.end_date)
+        reassign_logs_to_event(event_id, event[0]['start_date'], complete_data.end_date, customer_id)
 
         return {
             "message": "Winter event completed successfully",
@@ -256,7 +273,8 @@ def complete_winter_event(
 def update_winter_event(
     event_id: int,
     event_data: dict,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Update a winter event's details (name, description, dates)
@@ -270,8 +288,8 @@ def update_winter_event(
 
     # Check if event exists
     event = fetch_query(
-        "SELECT id FROM winter_events WHERE id = %s",
-        (event_id,)
+        "SELECT id FROM winter_events WHERE id = %s AND customer_id = %s",
+        (event_id, customer_id)
     )
 
     if not event:
@@ -297,12 +315,13 @@ def update_winter_event(
             """UPDATE winter_events
                SET event_name = %s, description = %s, start_date = %s,
                    end_date = %s, status = %s
-               WHERE id = %s""",
-            (event_name, description, start_date, end_date, status, event_id)
+               WHERE id = %s
+                 AND customer_id = %s""",
+            (event_name, description, start_date, end_date, status, event_id, customer_id)
         )
 
         # Reassign logs to reflect the updated event dates
-        reassign_logs_to_event(event_id, start_date, end_date)
+        reassign_logs_to_event(event_id, start_date, end_date, customer_id)
 
         return {
             "message": "Winter event updated successfully",
@@ -319,7 +338,8 @@ def update_winter_event(
 @router.post("/winter-events/{event_id}/cancel")
 def cancel_winter_event(
     event_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Cancel a winter event
@@ -333,8 +353,8 @@ def cancel_winter_event(
 
     # Check if event exists
     event = fetch_query(
-        "SELECT id, event_name, status FROM winter_events WHERE id = %s",
-        (event_id,)
+        "SELECT id, event_name, status FROM winter_events WHERE id = %s AND customer_id = %s",
+        (event_id, customer_id)
     )
 
     if not event:
@@ -349,8 +369,8 @@ def cancel_winter_event(
     # Update event to cancelled
     try:
         execute_query(
-            "UPDATE winter_events SET status = 'cancelled' WHERE id = %s",
-            (event_id,)
+            "UPDATE winter_events SET status = 'cancelled' WHERE id = %s AND customer_id = %s",
+            (event_id, customer_id)
         )
 
         return {
@@ -368,7 +388,8 @@ def cancel_winter_event(
 @router.delete("/winter-events/{event_id}")
 def delete_winter_event(
     event_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Delete a winter event (Admin only)
@@ -379,8 +400,8 @@ def delete_winter_event(
 
     # Check if event exists
     event = fetch_query(
-        "SELECT id, event_name FROM winter_events WHERE id = %s",
-        (event_id,)
+        "SELECT id, event_name FROM winter_events WHERE id = %s AND customer_id = %s",
+        (event_id, customer_id)
     )
 
     if not event:
@@ -388,12 +409,12 @@ def delete_winter_event(
 
     # Get log count before deletion
     log_count = fetch_query(
-        "SELECT COUNT(*) as count FROM winter_ops_logs WHERE winter_event_id = %s",
-        (event_id,)
+        "SELECT COUNT(*) as count FROM winter_ops_logs WHERE winter_event_id = %s AND customer_id = %s",
+        (event_id, customer_id)
     )[0]['count']
 
     try:
-        execute_query("DELETE FROM winter_events WHERE id = %s", (event_id,))
+        execute_query("DELETE FROM winter_events WHERE id = %s AND customer_id = %s", (event_id, customer_id))
 
         return {
             "message": f"Winter event '{event[0]['event_name']}' deleted",

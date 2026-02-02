@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from db import execute_query, fetch_query
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -27,11 +27,11 @@ class WinterOpsLog(BaseModel):
     notes: str | None = None
 
 @router.post("/submit-winter-log/")
-def submit_winter_log(log: WinterOpsLog, current_user: dict = Depends(get_current_user)):
+def submit_winter_log(log: WinterOpsLog, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     # Get authenticated user info from database
     user_id = int(current_user["sub"])
     user_role = current_user.get("role")
-    user_info = fetch_query("SELECT name FROM users WHERE id = %s", (user_id,))
+    user_info = fetch_query("SELECT name FROM users WHERE id = %s AND customer_id = %s", (user_id, customer_id))
     user_name = user_info[0]['name'] if user_info else 'Unknown'
 
     # Always set user_id to authenticated user (for audit trail)
@@ -68,12 +68,13 @@ def submit_winter_log(log: WinterOpsLog, current_user: dict = Depends(get_curren
         FROM winter_events
         WHERE %s >= start_date
         AND (%s <= end_date OR end_date IS NULL)
+        AND customer_id = %s
         ORDER BY
             CASE WHEN status = 'active' THEN 1 ELSE 2 END,
             start_date DESC
         LIMIT 1
         """,
-        (log.time_in, log.time_in)
+        (log.time_in, log.time_in, customer_id)
     )
 
     if time_based_event:
@@ -87,8 +88,8 @@ def submit_winter_log(log: WinterOpsLog, current_user: dict = Depends(get_curren
 
     query = """
         INSERT INTO winter_ops_logs
-        (property_id, contractor_id, user_id, contractor_name, worker_name, equipment, time_in, time_out, status, bulk_salt_qty, bag_salt_qty, calcium_chloride_qty, customer_provided, notes, winter_event_id)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
+        (property_id, contractor_id, user_id, contractor_name, worker_name, equipment, time_in, time_out, status, bulk_salt_qty, bag_salt_qty, calcium_chloride_qty, customer_provided, notes, winter_event_id, customer_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     values = (
         log.property_id,
@@ -105,7 +106,8 @@ def submit_winter_log(log: WinterOpsLog, current_user: dict = Depends(get_curren
         log.calcium_chloride_qty,
         log.customer_provided,
         log.notes,
-        winter_event_id
+        winter_event_id,
+        customer_id
     )
     result = execute_query(query, values)
 
@@ -115,7 +117,7 @@ def submit_winter_log(log: WinterOpsLog, current_user: dict = Depends(get_curren
     return {"message": message, "winter_event_id": winter_event_id, "log_id": log_id, "status": log.status}
 
 @router.get("/winter-logs/")
-def get_winter_logs():
+def get_winter_logs(customer_id: str = Depends(get_customer_id)):
     query = """
         SELECT
             w.id, l.name AS property_name, w.property_id,
@@ -125,14 +127,15 @@ def get_winter_logs():
             w.winter_event_id,
             we.event_name AS winter_event_name
         FROM winter_ops_logs w
-        JOIN locations l ON w.property_id = l.id
-        LEFT JOIN winter_events we ON w.winter_event_id = we.id
+        JOIN locations l ON w.property_id = l.id AND l.customer_id = %s
+        LEFT JOIN winter_events we ON w.winter_event_id = we.id AND we.customer_id = %s
+        WHERE w.customer_id = %s
         ORDER BY w.time_in DESC
     """
-    return fetch_query(query)
+    return fetch_query(query, (customer_id, customer_id, customer_id))
 
 @router.get("/winter-logs/open/")
-def get_open_winter_logs(current_user: dict = Depends(get_current_user)):
+def get_open_winter_logs(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get all open (in-progress) winter logs for the current user"""
     user_id = int(current_user["sub"])
 
@@ -145,24 +148,24 @@ def get_open_winter_logs(current_user: dict = Depends(get_current_user)):
             w.winter_event_id,
             we.event_name AS winter_event_name
         FROM winter_ops_logs w
-        JOIN locations l ON w.property_id = l.id
-        LEFT JOIN winter_events we ON w.winter_event_id = we.id
-        WHERE w.status = 'open' AND w.user_id = %s
+        JOIN locations l ON w.property_id = l.id AND l.customer_id = %s
+        LEFT JOIN winter_events we ON w.winter_event_id = we.id AND we.customer_id = %s
+        WHERE w.status = 'open' AND w.user_id = %s AND w.customer_id = %s
         ORDER BY w.time_in DESC
     """
-    return fetch_query(query, (user_id,))
+    return fetch_query(query, (customer_id, customer_id, user_id, customer_id))
 
 @router.put("/winter-logs/{log_id}/close")
-def close_winter_log(log_id: int, time_out: str, current_user: dict = Depends(get_current_user)):
+def close_winter_log(log_id: int, time_out: str, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Close an open winter log by setting time_out and status"""
     user_id = int(current_user["sub"])
 
     # Verify this log belongs to the current user and is open
     verify_query = """
         SELECT id, user_id, status FROM winter_ops_logs
-        WHERE id = %s
+        WHERE id = %s AND customer_id = %s
     """
-    log = fetch_query(verify_query, (log_id,))
+    log = fetch_query(verify_query, (log_id, customer_id))
 
     if not log:
         raise HTTPException(status_code=404, detail="Log not found")
@@ -177,20 +180,20 @@ def close_winter_log(log_id: int, time_out: str, current_user: dict = Depends(ge
     query = """
         UPDATE winter_ops_logs
         SET time_out = %s, status = 'closed'
-        WHERE id = %s
+        WHERE id = %s AND customer_id = %s
     """
-    execute_query(query, (time_out, log_id))
+    execute_query(query, (time_out, log_id, customer_id))
 
     return {"message": "Log closed successfully", "log_id": log_id}
 
 @router.put("/winter-logs/{log_id}")
-def update_winter_log(log_id: int, log: WinterOpsLog, current_user: dict = Depends(get_current_user)):
+def update_winter_log(log_id: int, log: WinterOpsLog, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Update winter ops log - Users can update their own logs, Admin/Manager can update any"""
     user_id = int(current_user["sub"])
     user_role = current_user["role"]
 
     # Check if log exists and get its owner
-    existing_log = fetch_query("SELECT user_id FROM winter_ops_logs WHERE id = %s", (log_id,))
+    existing_log = fetch_query("SELECT user_id FROM winter_ops_logs WHERE id = %s AND customer_id = %s", (log_id, customer_id))
     if not existing_log:
         raise HTTPException(status_code=404, detail="Log not found")
 
@@ -215,12 +218,13 @@ def update_winter_log(log_id: int, log: WinterOpsLog, current_user: dict = Depen
             FROM winter_events
             WHERE %s >= start_date
             AND (%s <= end_date OR end_date IS NULL)
+            AND customer_id = %s
             ORDER BY
                 CASE WHEN status = 'active' THEN 1 ELSE 2 END,
                 start_date DESC
             LIMIT 1
             """,
-            (log.time_in, log.time_in)
+            (log.time_in, log.time_in, customer_id)
         )
 
         winter_event_id = time_based_event[0]['id'] if time_based_event else None
@@ -231,13 +235,13 @@ def update_winter_log(log_id: int, log: WinterOpsLog, current_user: dict = Depen
                 equipment = %s, time_in = %s, time_out = %s, status = %s,
                 bulk_salt_qty = %s, bag_salt_qty = %s, calcium_chloride_qty = %s,
                 customer_provided = %s, notes = %s, winter_event_id = %s
-            WHERE id = %s
+            WHERE id = %s AND customer_id = %s
         """
         values = (
             log.property_id, log.contractor_id, log.user_id, log.contractor_name, log.worker_name,
             log.equipment, log.time_in, log.time_out, log.status,
             log.bulk_salt_qty, log.bag_salt_qty, log.calcium_chloride_qty,
-            log.customer_provided, log.notes, winter_event_id, log_id
+            log.customer_provided, log.notes, winter_event_id, log_id, customer_id
         )
         execute_query(query, values)
 
@@ -251,20 +255,20 @@ def update_winter_log(log_id: int, log: WinterOpsLog, current_user: dict = Depen
         raise HTTPException(status_code=500, detail=f"Failed to update log: {str(e)}")
 
 @router.delete("/winter-logs/{log_id}")
-def delete_winter_log(log_id: int, current_user: dict = Depends(get_current_user)):
+def delete_winter_log(log_id: int, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Delete winter ops log (Admin only)"""
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=403, detail="Admins only!")
 
     try:
-        execute_query("DELETE FROM winter_ops_logs WHERE id = %s", (log_id,))
+        execute_query("DELETE FROM winter_ops_logs WHERE id = %s AND customer_id = %s", (log_id, customer_id))
         return {"message": "Winter log deleted successfully!"}
     except Exception as e:
         logger.error(f"Failed to delete winter log: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to delete log: {str(e)}")
 
 @router.put("/winter-logs/{log_id}/assign-event")
-def assign_log_to_event(log_id: int, event_data: dict, current_user: dict = Depends(get_current_user)):
+def assign_log_to_event(log_id: int, event_data: dict, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Manually assign a winter log to a specific event (Admin/Manager only)"""
     if current_user["role"] not in ["Admin", "Manager"]:
         raise HTTPException(status_code=403, detail="Admin or Manager access required")
@@ -276,14 +280,14 @@ def assign_log_to_event(log_id: int, event_data: dict, current_user: dict = Depe
 
     try:
         # Verify the event exists
-        event = fetch_query("SELECT id, event_name FROM winter_events WHERE id = %s", (winter_event_id,))
+        event = fetch_query("SELECT id, event_name FROM winter_events WHERE id = %s AND customer_id = %s", (winter_event_id, customer_id))
         if not event:
             raise HTTPException(status_code=404, detail="Winter event not found")
 
         # Update the log
         execute_query(
-            "UPDATE winter_ops_logs SET winter_event_id = %s WHERE id = %s",
-            (winter_event_id, log_id)
+            "UPDATE winter_ops_logs SET winter_event_id = %s WHERE id = %s AND customer_id = %s",
+            (winter_event_id, log_id, customer_id)
         )
 
         return {

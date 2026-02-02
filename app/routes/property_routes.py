@@ -2,7 +2,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from pydantic import BaseModel
 from db import fetch_query, execute_query
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -32,10 +32,10 @@ class PropertyUpdate(PropertyData):
     id: int
 
 @router.post("/add-property/")
-def add_property(property_data: PropertyData):
+def add_property(property_data: PropertyData, customer_id: str = Depends(get_customer_id)):
     # Check if property with this address already exists
-    check_query = "SELECT id, name FROM locations WHERE address = %s"
-    existing = fetch_query(check_query, (property_data.address,))
+    check_query = "SELECT id, name FROM locations WHERE address = %s AND customer_id = %s"
+    existing = fetch_query(check_query, (property_data.address, customer_id))
 
     if existing:
         raise HTTPException(
@@ -44,47 +44,8 @@ def add_property(property_data: PropertyData):
         )
 
     query = """
-        INSERT INTO locations (name, address, sqft, area_manager, plow, salt, trigger_type, trigger_amount, contract_tier, open_by_time, billing_type, plow_rate, salt_rate, sidewalk_deice_rate, sidewalk_snow_rate)
-        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
-    """
-    params = (
-        property_data.name,
-        property_data.address,
-        property_data.sqft,
-        property_data.area_manager,
-        property_data.plow,
-        property_data.salt,
-        property_data.trigger_type,
-        property_data.trigger_amount,
-        property_data.contract_tier,
-        property_data.open_by_time,
-        property_data.billing_type,
-        property_data.plow_rate,
-        property_data.salt_rate,
-        property_data.sidewalk_deice_rate,
-        property_data.sidewalk_snow_rate
-    )
-    try:
-        execute_query(query, params)
-        return {"message": "Property added successfully"}
-    except Exception as e:
-        logger.error(f"Failed to add property: {str(e)}", exc_info=True)
-        raise HTTPException(status_code=500, detail=f"Failed to add property: {str(e)}")
-
-@router.get("/properties/")
-def get_properties():
-    properties = fetch_query("SELECT * FROM locations")
-    # Return empty array instead of 404 if no properties exist
-    return properties if properties else []
-
-@router.put("/update-property/")
-def update_property(property_data: PropertyUpdate):
-    query = """
-        UPDATE locations
-        SET name = %s, address = %s, sqft = %s, area_manager = %s, plow = %s, salt = %s,
-            trigger_type = %s, trigger_amount = %s, contract_tier = %s, open_by_time = %s,
-            billing_type = %s, plow_rate = %s, salt_rate = %s, sidewalk_deice_rate = %s, sidewalk_snow_rate = %s
-        WHERE id = %s
+        INSERT INTO locations (name, address, sqft, area_manager, plow, salt, trigger_type, trigger_amount, contract_tier, open_by_time, billing_type, plow_rate, salt_rate, sidewalk_deice_rate, sidewalk_snow_rate, customer_id)
+        VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s, %s)
     """
     params = (
         property_data.name,
@@ -102,7 +63,48 @@ def update_property(property_data: PropertyUpdate):
         property_data.salt_rate,
         property_data.sidewalk_deice_rate,
         property_data.sidewalk_snow_rate,
-        property_data.id
+        customer_id
+    )
+    try:
+        execute_query(query, params)
+        return {"message": "Property added successfully"}
+    except Exception as e:
+        logger.error(f"Failed to add property: {str(e)}", exc_info=True)
+        raise HTTPException(status_code=500, detail=f"Failed to add property: {str(e)}")
+
+@router.get("/properties/")
+def get_properties(customer_id: str = Depends(get_customer_id)):
+    properties = fetch_query("SELECT * FROM locations WHERE customer_id = %s", (customer_id,))
+    # Return empty array instead of 404 if no properties exist
+    return properties if properties else []
+
+@router.put("/update-property/")
+def update_property(property_data: PropertyUpdate, customer_id: str = Depends(get_customer_id)):
+    query = """
+        UPDATE locations
+        SET name = %s, address = %s, sqft = %s, area_manager = %s, plow = %s, salt = %s,
+            trigger_type = %s, trigger_amount = %s, contract_tier = %s, open_by_time = %s,
+            billing_type = %s, plow_rate = %s, salt_rate = %s, sidewalk_deice_rate = %s, sidewalk_snow_rate = %s
+        WHERE id = %s AND customer_id = %s
+    """
+    params = (
+        property_data.name,
+        property_data.address,
+        property_data.sqft,
+        property_data.area_manager,
+        property_data.plow,
+        property_data.salt,
+        property_data.trigger_type,
+        property_data.trigger_amount,
+        property_data.contract_tier,
+        property_data.open_by_time,
+        property_data.billing_type,
+        property_data.plow_rate,
+        property_data.salt_rate,
+        property_data.sidewalk_deice_rate,
+        property_data.sidewalk_snow_rate,
+        property_data.id,
+        customer_id
     )
     try:
         execute_query(query, params)
@@ -112,10 +114,10 @@ def update_property(property_data: PropertyUpdate):
         raise HTTPException(status_code=500, detail=f"Failed to update property: {str(e)}")
 
 @router.delete("/delete-property/{property_id}")
-def delete_property(property_id: int):
-    query = "DELETE FROM locations WHERE id = %s"
+def delete_property(property_id: int, customer_id: str = Depends(get_customer_id)):
+    query = "DELETE FROM locations WHERE id = %s AND customer_id = %s"
     try:
-        execute_query(query, (property_id,))
+        execute_query(query, (property_id, customer_id))
         return {"message": "Property deleted successfully"}
     except Exception as e:
         logger.error(f"Failed to delete property: {str(e)}", exc_info=True)
@@ -124,7 +126,8 @@ def delete_property(property_id: int):
 @router.post("/bulk-import-properties/")
 async def bulk_import_properties(
     file: UploadFile = File(...),
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Bulk import properties from Excel file.
@@ -180,8 +183,8 @@ async def bulk_import_properties(
                 address = str(row['Address']).strip()
 
                 # Check if property with this address already exists
-                check_query = "SELECT id FROM locations WHERE address = %s"
-                existing = fetch_query(check_query, (address,))
+                check_query = "SELECT id FROM locations WHERE address = %s AND customer_id = %s"
+                existing = fetch_query(check_query, (address, customer_id))
 
                 if existing:
                     # Property already exists, skip it
@@ -190,8 +193,8 @@ async def bulk_import_properties(
 
                 # Insert property
                 query = """
-                    INSERT INTO locations (name, address, sqft, area_manager, plow, salt)
-                    VALUES (%s, %s, %s, %s, %s, %s)
+                    INSERT INTO locations (name, address, sqft, area_manager, plow, salt, customer_id)
+                    VALUES (%s, %s, %s, %s, %s, %s, %s)
                 """
                 params = (
                     str(row['Property Name']).strip(),
@@ -199,7 +202,8 @@ async def bulk_import_properties(
                     sqft,
                     str(row['area manager']).strip(),
                     plow,
-                    salt
+                    salt,
+                    customer_id
                 )
                 execute_query(query, params)
                 imported_count += 1
@@ -241,7 +245,7 @@ async def bulk_import_properties(
 # ===== PROPERTY-CONTRACTOR ASSIGNMENT ROUTES (KANBAN BOARD) =====
 
 @router.get("/properties/board/")
-def get_property_board(current_user: dict = Depends(get_current_user)):
+def get_property_board(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """
     Get all properties with their assigned contractors for Kanban board view.
     Returns properties with nested contractor lists.
@@ -252,9 +256,10 @@ def get_property_board(current_user: dict = Depends(get_current_user)):
             SELECT id, name, address, sqft, area_manager, plow, salt,
                    trigger_type, trigger_amount, contract_tier, open_by_time
             FROM locations
+            WHERE customer_id = %s
             ORDER BY name
         """
-        properties = fetch_query(properties_query)
+        properties = fetch_query(properties_query, (customer_id,))
 
         if not properties:
             return []
@@ -275,10 +280,10 @@ def get_property_board(current_user: dict = Depends(get_current_user)):
                 u.phone as contractor_phone
             FROM property_contractors pc
             JOIN users u ON pc.contractor_id = u.id
-            WHERE u.status = 'active'
+            WHERE u.status = 'active' AND pc.customer_id = %s AND u.customer_id = %s
             ORDER BY pc.is_primary DESC, u.name
         """
-        assignments = fetch_query(assignments_query)
+        assignments = fetch_query(assignments_query, (customer_id, customer_id))
 
         # Group contractors by property
         contractors_by_property = {}
@@ -310,7 +315,7 @@ def get_property_board(current_user: dict = Depends(get_current_user)):
         raise HTTPException(status_code=500, detail=f"Failed to fetch property board: {str(e)}")
 
 @router.get("/properties/{property_id}/contractors/")
-def get_property_contractors(property_id: int, current_user: dict = Depends(get_current_user)):
+def get_property_contractors(property_id: int, current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get all contractors assigned to a specific property"""
     query = """
         SELECT
@@ -324,11 +329,11 @@ def get_property_contractors(property_id: int, current_user: dict = Depends(get_
             u.phone
         FROM property_contractors pc
         JOIN users u ON pc.contractor_id = u.id
-        WHERE pc.property_id = %s AND u.status = 'active'
+        WHERE pc.property_id = %s AND u.status = 'active' AND pc.customer_id = %s AND u.customer_id = %s
         ORDER BY pc.is_primary DESC, u.name
     """
     try:
-        contractors = fetch_query(query, (property_id,))
+        contractors = fetch_query(query, (property_id, customer_id, customer_id))
         return contractors if contractors else []
     except Exception as e:
         logger.error(f"Failed to fetch contractors for property: {str(e)}", exc_info=True)
@@ -342,21 +347,22 @@ class PropertyContractorAssignment(BaseModel):
 def assign_contractor_to_property(
     property_id: int,
     assignment: PropertyContractorAssignment,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Assign a contractor to a property"""
     if current_user["role"] not in ["Admin", "Manager"]:
         raise HTTPException(status_code=403, detail="Only Admins and Managers can assign contractors")
 
     # Check if property exists
-    prop_check = fetch_query("SELECT id FROM locations WHERE id = %s", (property_id,))
+    prop_check = fetch_query("SELECT id FROM locations WHERE id = %s AND customer_id = %s", (property_id, customer_id))
     if not prop_check:
         raise HTTPException(status_code=404, detail="Property not found")
 
     # Check if contractor exists and is active
     contractor_check = fetch_query(
-        "SELECT id, role FROM users WHERE id = %s AND status = 'active'",
-        (assignment.contractor_id,)
+        "SELECT id, role FROM users WHERE id = %s AND status = 'active' AND customer_id = %s",
+        (assignment.contractor_id, customer_id)
     )
     if not contractor_check:
         raise HTTPException(status_code=404, detail="Contractor not found or inactive")
@@ -365,19 +371,19 @@ def assign_contractor_to_property(
 
     # Check if assignment already exists
     existing = fetch_query(
-        "SELECT id FROM property_contractors WHERE property_id = %s AND contractor_id = %s",
-        (property_id, assignment.contractor_id)
+        "SELECT id FROM property_contractors WHERE property_id = %s AND contractor_id = %s AND customer_id = %s",
+        (property_id, assignment.contractor_id, customer_id)
     )
     if existing:
         raise HTTPException(status_code=400, detail="Contractor is already assigned to this property")
 
     # Insert assignment
     query = """
-        INSERT INTO property_contractors (property_id, contractor_id, is_primary)
-        VALUES (%s, %s, %s)
+        INSERT INTO property_contractors (property_id, contractor_id, is_primary, customer_id)
+        VALUES (%s, %s, %s, %s)
     """
     try:
-        execute_query(query, (property_id, assignment.contractor_id, assignment.is_primary))
+        execute_query(query, (property_id, assignment.contractor_id, assignment.is_primary, customer_id))
         return {"message": "Contractor assigned successfully"}
     except Exception as e:
         logger.error(f"Failed to assign contractor: {str(e)}", exc_info=True)
@@ -387,15 +393,16 @@ def assign_contractor_to_property(
 def remove_contractor_from_property(
     property_id: int,
     contractor_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Remove a contractor assignment from a property"""
     if current_user["role"] not in ["Admin", "Manager"]:
         raise HTTPException(status_code=403, detail="Only Admins and Managers can remove contractors")
 
-    query = "DELETE FROM property_contractors WHERE property_id = %s AND contractor_id = %s"
+    query = "DELETE FROM property_contractors WHERE property_id = %s AND contractor_id = %s AND customer_id = %s"
     try:
-        execute_query(query, (property_id, contractor_id))
+        execute_query(query, (property_id, contractor_id, customer_id))
         return {"message": "Contractor removed from property"}
     except Exception as e:
         logger.error(f"Failed to remove contractor: {str(e)}", exc_info=True)
@@ -405,7 +412,8 @@ def remove_contractor_from_property(
 def set_primary_contractor(
     property_id: int,
     contractor_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Set a contractor as the primary contractor for a property"""
     if current_user["role"] not in ["Admin", "Manager"]:
@@ -414,14 +422,14 @@ def set_primary_contractor(
     try:
         # First, unset all primary contractors for this property
         execute_query(
-            "UPDATE property_contractors SET is_primary = FALSE WHERE property_id = %s",
-            (property_id,)
+            "UPDATE property_contractors SET is_primary = FALSE WHERE property_id = %s AND customer_id = %s",
+            (property_id, customer_id)
         )
 
         # Then set this contractor as primary
         execute_query(
-            "UPDATE property_contractors SET is_primary = TRUE WHERE property_id = %s AND contractor_id = %s",
-            (property_id, contractor_id)
+            "UPDATE property_contractors SET is_primary = TRUE WHERE property_id = %s AND contractor_id = %s AND customer_id = %s",
+            (property_id, contractor_id, customer_id)
         )
 
         return {"message": "Primary contractor updated"}
@@ -430,7 +438,7 @@ def set_primary_contractor(
         raise HTTPException(status_code=500, detail=f"Failed to set primary contractor: {str(e)}")
 
 @router.get("/my-properties/")
-def get_my_assigned_properties(current_user: dict = Depends(get_current_user)):
+def get_my_assigned_properties(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """Get all properties assigned to the current user"""
     user_id = int(current_user["sub"])
 
@@ -442,15 +450,16 @@ def get_my_assigned_properties(current_user: dict = Depends(get_current_user)):
              WHERE w.property_id = l.id
              AND w.user_id = %s
              AND w.time_out IS NULL
-             AND DATE(w.time_in) = CURDATE()) as has_active_ticket
+             AND DATE(w.time_in) = CURDATE()
+             AND w.customer_id = %s) as has_active_ticket
         FROM locations l
         INNER JOIN property_contractors pc ON l.id = pc.property_id
-        WHERE pc.contractor_id = %s
+        WHERE pc.contractor_id = %s AND l.customer_id = %s AND pc.customer_id = %s
         ORDER BY pc.is_primary DESC, l.name ASC
     """
 
     try:
-        properties = fetch_query(query, (user_id, user_id))
+        properties = fetch_query(query, (user_id, customer_id, user_id, customer_id, customer_id))
         return properties if properties else []
     except Exception as e:
         logger.error(f"Failed to get user's properties: {str(e)}", exc_info=True)

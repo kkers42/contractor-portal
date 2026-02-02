@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import os
 import requests
 import secrets
-from auth import get_curre, get_customer_idnt_user
+from auth import get_current_user, get_customer_id
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -54,7 +54,7 @@ class PropertyMappingUpdate(BaseModel):
 # ==================== OAUTH FLOW ====================
 
 @router.get("/connect")
-def connect_jobber(current_user: dict = Depends(get_current_user)):
+def connect_jobber(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """
     Initiate OAuth flow to connect Jobber account
     Admin/Manager only
@@ -69,6 +69,7 @@ def connect_jobber(current_user: dict = Depends(get_current_user)):
     state = secrets.token_urlsafe(32)
     oauth_states[state] = {
         "user_id": current_user.get("sub"),
+        "customer_id": customer_id,
         "tenant_id": 1,  # Default tenant
         "timestamp": datetime.utcnow()
     }
@@ -124,9 +125,10 @@ async def jobber_callback(code: str, state: str):
 
     # Store credentials in database
     tenant_id = oauth_data["tenant_id"]
+    customer_id = oauth_data["customer_id"]
 
     # Check if credentials already exist
-    existing = fetch_query("SELECT id FROM jobber_credentials WHERE tenant_id = %s", (tenant_id,))
+    existing = fetch_query("SELECT id FROM jobber_credentials WHERE tenant_id = %s AND customer_id = %s", (tenant_id, customer_id))
 
     if existing:
         # Update existing
@@ -134,17 +136,17 @@ async def jobber_callback(code: str, state: str):
             """UPDATE jobber_credentials
                SET access_token = %s, refresh_token = %s, token_expires_at = %s,
                    scope = %s, updated_at = NOW()
-               WHERE tenant_id = %s""",
+               WHERE tenant_id = %s AND customer_id = %s""",
             (tokens["access_token"], tokens["refresh_token"], expires_at,
-             tokens.get("scope"), tenant_id)
+             tokens.get("scope"), tenant_id, customer_id)
         )
     else:
         # Insert new
         execute_query(
             """INSERT INTO jobber_credentials
-               (tenant_id, access_token, refresh_token, token_expires_at, scope)
-               VALUES (%s, %s, %s, %s, %s)""",
-            (tenant_id, tokens["access_token"], tokens["refresh_token"],
+               (tenant_id, customer_id, access_token, refresh_token, token_expires_at, scope)
+               VALUES (%s, %s, %s, %s, %s, %s)""",
+            (tenant_id, customer_id, tokens["access_token"], tokens["refresh_token"],
              expires_at, tokens.get("scope"))
         )
 
@@ -153,7 +155,7 @@ async def jobber_callback(code: str, state: str):
 
 
 @router.post("/disconnect")
-def disconnect_jobber(current_user: dict = Depends(get_current_user)):
+def disconnect_jobber(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """
     Disconnect Jobber integration
     Admin/Manager only
@@ -163,7 +165,7 @@ def disconnect_jobber(current_user: dict = Depends(get_current_user)):
 
     tenant_id = 1  # Default tenant
 
-    execute_query("DELETE FROM jobber_credentials WHERE tenant_id = %s", (tenant_id,))
+    execute_query("DELETE FROM jobber_credentials WHERE tenant_id = %s AND customer_id = %s", (tenant_id, customer_id))
 
     return {"ok": True, "message": "Jobber disconnected successfully"}
 
