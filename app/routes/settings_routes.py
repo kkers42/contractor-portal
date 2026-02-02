@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from db import fetch_query, execute_query
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 from typing import Optional
 
 router = APIRouter()
@@ -151,6 +151,14 @@ async def get_available_integrations(current_user: dict = Depends(get_current_us
             "icon": "🤖"
         },
         {
+            "name": "Anthropic (Claude)",
+            "key_name": "anthropic_api_key",
+            "description": "AI monitoring agent for system health, self-healing, and diagnostics",
+            "cost": "~$3-5/month",
+            "signup_url": "https://console.anthropic.com/settings/keys",
+            "icon": "🔍"
+        },
+        {
             "name": "OpenWeatherMap",
             "key_name": "openweather_api_key",
             "description": "Weather forecasts and snow predictions",
@@ -167,12 +175,60 @@ async def get_available_integrations(current_user: dict = Depends(get_current_us
             "icon": "🗺️"
         },
         {
-            "name": "Twilio",
-            "key_name": "twilio_api_key",
-            "description": "SMS alerts for weather and open-by times",
+            "name": "Twilio Account SID",
+            "key_name": "twilio_account_sid",
+            "description": "Twilio Account SID (starts with AC...) - SMS alerts for weather and open-by times",
             "cost": "$0.0075 per SMS",
             "signup_url": "https://www.twilio.com/console",
             "icon": "📱"
+        },
+        {
+            "name": "Twilio Auth Token",
+            "key_name": "twilio_auth_token",
+            "description": "Twilio Auth Token from account dashboard - Required for SMS functionality",
+            "cost": "$0.0075 per SMS",
+            "signup_url": "https://www.twilio.com/console",
+            "icon": "🔑"
+        },
+        {
+            "name": "Twilio Phone Number",
+            "key_name": "twilio_phone_number",
+            "description": "Twilio phone number (format: +12345678901) - The FROM number for SMS",
+            "cost": "$0.0075 per SMS",
+            "signup_url": "https://www.twilio.com/console",
+            "icon": "☎️"
+        },
+        {
+            "name": "QuickBooks Client ID",
+            "key_name": "quickbooks_client_id",
+            "description": "QuickBooks Online integration - Client ID from Intuit Developer Portal",
+            "cost": "Free (requires QuickBooks Online subscription)",
+            "signup_url": "https://developer.intuit.com/app/developer/qbo/docs/get-started",
+            "icon": "💰"
+        },
+        {
+            "name": "QuickBooks Client Secret",
+            "key_name": "quickbooks_client_secret",
+            "description": "QuickBooks Online integration - Client Secret from Intuit Developer Portal",
+            "cost": "Free (requires QuickBooks Online subscription)",
+            "signup_url": "https://developer.intuit.com/app/developer/qbo/docs/get-started",
+            "icon": "🔐"
+        },
+        {
+            "name": "Gmail Address",
+            "key_name": "gmail_address",
+            "description": "Gmail email address for sending notifications (e.g., alerts@yourcompany.com)",
+            "cost": "Free (requires Gmail account)",
+            "signup_url": "https://support.google.com/mail/answer/185833",
+            "icon": "📧"
+        },
+        {
+            "name": "Gmail App Password",
+            "key_name": "gmail_app_password",
+            "description": "Gmail App Password (NOT your regular password - generate at Google Account settings)",
+            "cost": "Free (requires 2FA enabled)",
+            "signup_url": "https://support.google.com/accounts/answer/185833",
+            "icon": "🔑"
         }
     ]
 

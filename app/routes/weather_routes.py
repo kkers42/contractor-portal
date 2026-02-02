@@ -2,7 +2,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
 from db import fetch_query, execute_query
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 import requests
 import os
 from datetime import datetime, timedelta
@@ -148,11 +148,12 @@ async def get_properties_weather_forecast(
 ):
     """Get weather forecast for all properties with coordinates"""
 
-    # Get all properties
+    # Get all properties that should show on weather dashboard
     query = """
         SELECT id, name, address, latitude, longitude, trigger_type, trigger_amount,
                area_manager, open_by_time
         FROM locations
+        WHERE show_on_weather_dashboard = 1
     """
 
     properties = fetch_query(query)

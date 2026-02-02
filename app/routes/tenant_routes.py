@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime, timedelta
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 from db import fetch_query, execute_query
 
 router = APIRouter()

@@ -3,7 +3,7 @@ from pydantic import BaseModel
 from typing import List, Optional
 from datetime import datetime
 from db import fetch_query, execute_query
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 
 router = APIRouter()
 

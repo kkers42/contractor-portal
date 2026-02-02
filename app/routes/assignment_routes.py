@@ -7,7 +7,7 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

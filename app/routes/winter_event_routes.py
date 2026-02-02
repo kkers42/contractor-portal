@@ -8,10 +8,40 @@ from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import Optional
 from datetime import datetime
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 from db import fetch_query, execute_query
 
 router = APIRouter()
+
+
+def reassign_logs_to_event(event_id: int, start_date: str, end_date: Optional[str]):
+    """
+    Helper function to reassign logs to a specific event based on timestamp matching
+    This ensures logs that fall within an event's timeframe are automatically assigned
+    """
+    try:
+        if end_date:
+            # Event has an end date - assign logs within the range
+            execute_query(
+                """UPDATE winter_ops_logs
+                   SET winter_event_id = %s
+                   WHERE time_in >= %s
+                     AND time_in <= %s
+                     AND (winter_event_id IS NULL OR winter_event_id != %s)""",
+                (event_id, start_date, end_date, event_id)
+            )
+        else:
+            # Event is ongoing - assign logs from start_date onward
+            execute_query(
+                """UPDATE winter_ops_logs
+                   SET winter_event_id = %s
+                   WHERE time_in >= %s
+                     AND (winter_event_id IS NULL OR winter_event_id != %s)""",
+                (event_id, start_date, event_id)
+            )
+    except Exception as e:
+        print(f"[WARNING] Failed to reassign logs to event {event_id}: {str(e)}")
+        # Don't raise - this is a best-effort operation
 
 
 class WinterEventCreate(BaseModel):
@@ -148,6 +178,9 @@ def create_winter_event(
             )
         )
 
+        # Automatically assign any existing logs that fall within this event's timeframe
+        reassign_logs_to_event(event_id, event_data.start_date, None)
+
         return {
             "message": "Winter event started successfully",
             "event_id": event_id,
@@ -204,6 +237,9 @@ def complete_winter_event(
     try:
         execute_query(query, (complete_data.end_date, event_id))
 
+        # Reassign logs to ensure they're correctly assigned with the new end_date
+        reassign_logs_to_event(event_id, event[0]['start_date'], complete_data.end_date)
+
         return {
             "message": "Winter event completed successfully",
             "event_id": event_id,
@@ -213,6 +249,70 @@ def complete_winter_event(
         raise HTTPException(
             status_code=500,
             detail=f"Failed to complete winter event: {str(e)}"
+        )
+
+
+@router.put("/winter-events/{event_id}")
+def update_winter_event(
+    event_id: int,
+    event_data: dict,
+    current_user: dict = Depends(get_current_user)
+):
+    """
+    Update a winter event's details (name, description, dates)
+    Admin/Manager only
+    """
+    if current_user.get("role") not in ["Admin", "Manager"]:
+        raise HTTPException(
+            status_code=403,
+            detail="Manager or Admin access required"
+        )
+
+    # Check if event exists
+    event = fetch_query(
+        "SELECT id FROM winter_events WHERE id = %s",
+        (event_id,)
+    )
+
+    if not event:
+        raise HTTPException(status_code=404, detail="Winter event not found")
+
+    # Extract update fields
+    event_name = event_data.get("event_name")
+    description = event_data.get("description")
+    start_date = event_data.get("start_date")
+    end_date = event_data.get("end_date")
+
+    if not event_name or not start_date:
+        raise HTTPException(
+            status_code=400,
+            detail="event_name and start_date are required"
+        )
+
+    # Determine status based on end_date
+    status = "completed" if end_date else "active"
+
+    try:
+        execute_query(
+            """UPDATE winter_events
+               SET event_name = %s, description = %s, start_date = %s,
+                   end_date = %s, status = %s
+               WHERE id = %s""",
+            (event_name, description, start_date, end_date, status, event_id)
+        )
+
+        # Reassign logs to reflect the updated event dates
+        reassign_logs_to_event(event_id, start_date, end_date)
+
+        return {
+            "message": "Winter event updated successfully",
+            "event_id": event_id,
+            "event_name": event_name
+        }
+    except Exception as e:
+        raise HTTPException(
+            status_code=500,
+            detail=f"Failed to update winter event: {str(e)}"
         )
 
 

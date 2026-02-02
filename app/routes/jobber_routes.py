@@ -11,7 +11,7 @@ from datetime import datetime, timedelta
 import os
 import requests
 import secrets
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

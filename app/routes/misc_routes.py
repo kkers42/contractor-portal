@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from db import fetch_query, execute_query
-from auth import get_current_user, hash_password
+from auth import get_curre, get_customer_idnt_user, hash_password
 from utils.logger import get_logger
 
 logger = get_logger(__name__)

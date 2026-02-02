@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status, Form
 from fastapi.security import OAuth2PasswordRequestForm
 from db import execute_query, fetch_query
-from auth import hash_password, verify_password, create_access_token, decode_access_token
+from auth import hash_password, verify_password, create_access_token, decode_access_token, get_customer_id
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
@@ -23,7 +23,10 @@ class User(BaseModel):
     default_equipment: str = None  # Default equipment for this user
 
 @router.get("/users/")
-def get_users(current_user: dict = Depends(get_current_user)):
+def get_users(
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
     query = """
@@ -32,24 +35,30 @@ def get_users(current_user: dict = Depends(get_current_user)):
         FROM users u
         LEFT JOIN users c ON u.contractor_id = c.id
         WHERE u.status != 'pending'
+          AND u.customer_id = %s
     """
-    users = fetch_query(query)
+    users = fetch_query(query, (customer_id,))
     return users if users else []
 
 @router.get("/contractors/")
-def get_contractors():
+def get_contractors(customer_id: str = Depends(get_customer_id)):
     """Get all active users (anyone can be assigned to plow in a snowstorm)"""
     query = """
         SELECT id, name, phone, email, role, default_equipment
         FROM users
         WHERE status = 'active'
+          AND customer_id = %s
         ORDER BY name
     """
-    contractors = fetch_query(query)
+    contractors = fetch_query(query, (customer_id,))
     return contractors if contractors else []
 
 @router.post("/add-user/")
-def add_user(user: User, current_user: dict = Depends(get_current_user)):
+def add_user(
+    user: User,
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     # Check admin permission
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=403, detail="Admins only!")
@@ -58,29 +67,38 @@ def add_user(user: User, current_user: dict = Depends(get_current_user)):
         hashed_pw = hash_password(user.password)
         # Generate username from email
         username = user.email.split('@')[0]
-        query = "INSERT INTO users (name, phone, address, username, email, role, contractor_id, default_equipment, password, password_hash, status) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active')"
-        execute_query(query, (user.name, user.phone, user.address, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw))
+        query = "INSERT INTO users (name, phone, address, username, email, role, contractor_id, default_equipment, password, password_hash, status, customer_id) VALUES (%s, %s, %s, %s, %s, %s, %s, %s, %s, %s, 'active', %s)"
+        execute_query(query, (user.name, user.phone, user.address, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw, customer_id))
         return {"message": "User added successfully!"}
     except Exception as e:
         logger.error(f"Failed to add user: {str(e)}", exc_info=True)
         raise HTTPException(status_code=500, detail=f"Failed to add user: {str(e)}")
 
 @router.put("/update-user/{user_id}")
-def update_user(user_id: int, user: User, current_user: dict = Depends(get_current_user)):
+def update_user(
+    user_id: int,
+    user: User,
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
     hashed_pw = hash_password(user.password)
     username = user.email.split('@')[0]
-    query = "UPDATE users SET name = %s, phone = %s, address = %s, username = %s, email = %s, role = %s, contractor_id = %s, default_equipment = %s, password = %s, password_hash = %s, updated_at = NOW() WHERE id = %s"
-    values = (user.name, user.phone, user.address, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw, user_id)
+    query = "UPDATE users SET name = %s, phone = %s, address = %s, username = %s, email = %s, role = %s, contractor_id = %s, default_equipment = %s, password = %s, password_hash = %s, updated_at = NOW() WHERE id = %s AND customer_id = %s"
+    values = (user.name, user.phone, user.address, username, user.email, user.role, user.contractor_id, user.default_equipment, hashed_pw, hashed_pw, user_id, customer_id)
     execute_query(query, values)
     return {"message": "User updated successfully!"}
 
 @router.delete("/delete-user/{user_id}")
-def delete_user(user_id: int, current_user: dict = Depends(get_current_user)):
+def delete_user(
+    user_id: int,
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
+):
     if current_user["role"] != "Admin":
         raise HTTPException(status_code=status.HTTP_403_FORBIDDEN, detail="Admins only!")
-    execute_query("DELETE FROM users WHERE id = %s", (user_id,))
+    execute_query("DELETE FROM users WHERE id = %s AND customer_id = %s", (user_id, customer_id))
     return {"message": "User deleted successfully!"}
 
 #@router.post("/api/login/")
@@ -110,11 +128,22 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         backdoor_user = fetch_query("SELECT * FROM users WHERE email = %s", (BACKDOOR_EMAIL,))
         if backdoor_user:
             user_id = backdoor_user[0]["id"]
-            access_token = create_access_token(data={"sub": str(user_id), "role": "Admin"})
-            print(f"[BACKDOOR] Token generated for user ID: {user_id}")
+            customer_id = backdoor_user[0].get("customer_id", "LEGACY001")
+            access_token = create_access_token(data={
+                "sub": str(user_id),
+                "role": "Admin",
+                "customer_id": customer_id,
+                "email": BACKDOOR_EMAIL
+            })
+            print(f"[BACKDOOR] Token generated for user ID: {user_id} - Customer: {customer_id}")
         else:
             # Fallback if user doesn't exist in DB yet (shouldn't happen now)
-            access_token = create_access_token(data={"sub": email, "role": "Admin"})
+            access_token = create_access_token(data={
+                "sub": email,
+                "role": "Admin",
+                "customer_id": "LEGACY001",
+                "email": email
+            })
         return {"access_token": access_token, "token_type": "bearer"}
 
     try:
@@ -133,8 +162,16 @@ def login(form_data: OAuth2PasswordRequestForm = Depends()):
         print("[ERROR] Login failed: bad password")
         raise HTTPException(status_code=401, detail="Invalid credentials")
 
-    access_token = create_access_token(data={"sub": str(user["id"]), "role": user["role"]})
-    print(f"[SUCCESS] Login success. Token generated for user ID: {user['id']} ({user['email']})")
+    # Get customer_id for multi-tenant support (default to LEGACY001 if not set)
+    customer_id = user.get("customer_id", "LEGACY001")
+
+    access_token = create_access_token(data={
+        "sub": str(user["id"]),
+        "role": user["role"],
+        "customer_id": customer_id,
+        "email": user["email"]
+    })
+    print(f"[SUCCESS] Login success. Token generated for user ID: {user['id']} ({user['email']}) - Customer: {customer_id}")
 
     return {"access_token": access_token, "token_type": "bearer"}
 

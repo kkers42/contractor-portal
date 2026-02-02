@@ -10,7 +10,7 @@ from typing import Optional
 import json
 import os
 from datetime import datetime
-from auth import get_current_user
+from auth import get_curre, get_customer_idnt_user
 from utils.logger import get_logger
 
 logger = get_logger(__name__)
