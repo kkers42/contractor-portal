@@ -65,7 +65,8 @@ from routes import (
     n8n_auth_routes,
     quickbooks_routes,
     email_routes,
-    checkin_routes
+    checkin_routes,
+    customer_routes
 )
 
 app.include_router(auth_routes.router)
@@ -89,6 +90,7 @@ app.include_router(n8n_auth_routes.router)
 app.include_router(quickbooks_routes.router)
 app.include_router(email_routes.router)
 app.include_router(checkin_routes.router)
+app.include_router(customer_routes.router, prefix="/api", tags=["customers"])
 
 if __name__ == "__main__":
     import uvicorn

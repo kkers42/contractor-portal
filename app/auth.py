@@ -9,7 +9,8 @@ import os
 SECRET_KEY = os.environ.get("JWT_SECRET_KEY", "default_secret_key")
 APP_JWT_SECRET = os.environ.get("APP_JWT_SECRET", SECRET_KEY)  # OAuth secret
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", 60))
+# 30 days = 43200 minutes (for technologically challenged users who need long sessions)
+ACCESS_TOKEN_EXPIRE_MINUTES = int(os.environ.get("JWT_EXPIRE_MINUTES", 43200))
 oauth2_scheme = OAuth2PasswordBearer(tokenUrl="login")
 
 def hash_password(password: str) -> str:
@@ -67,3 +68,28 @@ def get_current_user(token: str = Depends(oauth2_scheme)):
             status_code=status.HTTP_401_UNAUTHORIZED,
             detail="Invalid authentication credentials",
         )
+
+def get_customer_id(current_user: dict = Depends(get_current_user)) -> str:
+    """
+    Extract customer_id from the current user's JWT token.
+
+    This dependency ensures that every API call is automatically scoped to the user's customer.
+
+    Args:
+        current_user: The decoded JWT payload from get_current_user
+
+    Returns:
+        str: The customer_id from the JWT token
+
+    Raises:
+        HTTPException: If customer_id is missing from token
+    """
+    customer_id = current_user.get("customer_id")
+
+    if not customer_id:
+        raise HTTPException(
+            status_code=status.HTTP_403_FORBIDDEN,
+            detail="Invalid customer context - please re-authenticate"
+        )
+
+    return customer_id
