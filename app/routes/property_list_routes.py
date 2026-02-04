@@ -180,16 +180,17 @@ async def delete_property_list(list_id: int, current_user: dict = Depends(get_cu
 @router.post("/property-lists/add-property/")
 async def add_property_to_list(
     data: AddPropertyToList,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Add a property to a list"""
     user_id = int(current_user["sub"])
 
     # Verify list ownership or shared
     check_query = """
-        SELECT user_id, is_shared FROM property_lists WHERE id = %s
+        SELECT user_id, is_shared FROM property_lists WHERE id = %s AND customer_id = %s
     """
-    result = fetch_query(check_query, (data.list_id,))
+    result = fetch_query(check_query, (data.list_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Property list not found")
@@ -198,8 +199,8 @@ async def add_property_to_list(
         raise HTTPException(status_code=403, detail="Not authorized to modify this list")
 
     # Check if property exists
-    prop_check = "SELECT id FROM locations WHERE id = %s"
-    prop_result = fetch_query(prop_check, (data.property_id,))
+    prop_check = "SELECT id FROM locations WHERE id = %s AND customer_id = %s"
+    prop_result = fetch_query(prop_check, (data.property_id, customer_id))
 
     if not prop_result:
         raise HTTPException(status_code=404, detail="Property not found")
@@ -218,22 +219,30 @@ async def add_property_to_list(
 async def remove_property_from_list(
     list_id: int,
     property_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Remove a property from a list"""
     user_id = int(current_user["sub"])
 
     # Verify list ownership or shared
     check_query = """
-        SELECT user_id, is_shared FROM property_lists WHERE id = %s
+        SELECT user_id, is_shared FROM property_lists WHERE id = %s AND customer_id = %s
     """
-    result = fetch_query(check_query, (list_id,))
+    result = fetch_query(check_query, (list_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Property list not found")
 
     if result[0]["user_id"] != user_id and not result[0]["is_shared"]:
         raise HTTPException(status_code=403, detail="Not authorized to modify this list")
+
+    # Verify property belongs to customer before removing
+    prop_check = "SELECT id FROM locations WHERE id = %s AND customer_id = %s"
+    prop_result = fetch_query(prop_check, (property_id, customer_id))
+
+    if not prop_result:
+        raise HTTPException(status_code=404, detail="Property not found")
 
     # Remove from list
     query = "DELETE FROM property_list_items WHERE list_id = %s AND property_id = %s"

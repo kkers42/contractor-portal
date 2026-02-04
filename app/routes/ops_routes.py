@@ -301,7 +301,7 @@ def assign_log_to_event(log_id: int, event_data: dict, current_user: dict = Depe
         raise HTTPException(status_code=500, detail=f"Failed to assign log: {str(e)}")
 
 @router.post("/winter-logs/reassign-events/")
-def reassign_winter_events(current_user: dict = Depends(get_current_user)):
+def reassign_winter_events(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """
     Retroactively assign winter logs to events based on their time_in timestamps
     This fixes logs that were created before/after an event but have timestamps within the event's date range
@@ -320,14 +320,17 @@ def reassign_winter_events(current_user: dict = Depends(get_current_user)):
                 FROM winter_events we
                 WHERE wol.time_in >= we.start_date
                   AND (wol.time_in <= we.end_date OR we.end_date IS NULL)
+                  AND we.customer_id = %s
+                  AND wol.customer_id = we.customer_id
                 ORDER BY
                     CASE WHEN we.status = 'active' THEN 1 ELSE 2 END,
                     we.start_date DESC
                 LIMIT 1
             )
+            WHERE wol.customer_id = %s
         """
 
-        execute_query(update_query)
+        execute_query(update_query, (customer_id, customer_id))
 
         # Get statistics
         stats = fetch_query("""
@@ -336,7 +339,8 @@ def reassign_winter_events(current_user: dict = Depends(get_current_user)):
                 SUM(CASE WHEN winter_event_id IS NOT NULL THEN 1 ELSE 0 END) as assigned_logs,
                 SUM(CASE WHEN winter_event_id IS NULL THEN 1 ELSE 0 END) as unassigned_logs
             FROM winter_ops_logs
-        """)
+            WHERE customer_id = %s
+        """, (customer_id,))
 
         return {
             "message": "Winter logs reassigned to events based on timestamps",
@@ -466,7 +470,7 @@ def snap_to_15_minutes(dt_str: str) -> str:
     return dt.isoformat()
 
 @router.get("/suggested-log-time/")
-def get_suggested_log_time(current_user: dict = Depends(get_current_user)):
+def get_suggested_log_time(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """
     Get suggested start time for new log based on:
     1. Previous log's time_out (snapped to 15min)
@@ -482,19 +486,19 @@ def get_suggested_log_time(current_user: dict = Depends(get_current_user)):
     source = "current_time"
 
     # Get user's default equipment
-    user_query = "SELECT default_equipment FROM users WHERE id = %s"
-    user_result = fetch_query(user_query, (user_id,))
+    user_query = "SELECT default_equipment FROM users WHERE id = %s AND customer_id = %s"
+    user_result = fetch_query(user_query, (user_id, customer_id))
     default_equipment = user_result[0]['default_equipment'] if user_result and user_result[0].get('default_equipment') else None
 
     # Try to get most recent log for this user
     last_log_query = """
         SELECT time_out
         FROM winter_ops_logs
-        WHERE user_id = %s AND time_out IS NOT NULL
+        WHERE user_id = %s AND time_out IS NOT NULL AND customer_id = %s
         ORDER BY time_out DESC
         LIMIT 1
     """
-    last_log = fetch_query(last_log_query, (user_id,))
+    last_log = fetch_query(last_log_query, (user_id, customer_id))
 
     if last_log and last_log[0]['time_out']:
         # Use previous log's end time
@@ -505,11 +509,11 @@ def get_suggested_log_time(current_user: dict = Depends(get_current_user)):
         event_query = """
             SELECT start_date
             FROM winter_events
-            WHERE status = 'active'
+            WHERE status = 'active' AND customer_id = %s
             ORDER BY start_date DESC
             LIMIT 1
         """
-        event = fetch_query(event_query)
+        event = fetch_query(event_query, (customer_id,))
 
         if event and event[0]['start_date']:
             suggested_time = str(event[0]['start_date'])

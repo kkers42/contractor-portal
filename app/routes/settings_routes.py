@@ -233,7 +233,7 @@ async def get_available_integrations(current_user: dict = Depends(get_current_us
     ]
 
     # Check which ones are configured
-    configured_keys = await get_api_keys(current_user)
+    configured_keys = await get_api_keys(current_user, customer_id)
     configured_names = {k["key_name"] for k in configured_keys if k["is_configured"]}
 
     for integration in integrations:

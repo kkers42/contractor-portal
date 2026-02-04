@@ -172,13 +172,13 @@ def disconnect_jobber(current_user: dict = Depends(get_current_user), customer_i
 
 # ==================== TOKEN MANAGEMENT ====================
 
-def get_jobber_access_token(tenant_id: int = 1) -> str:
+def get_jobber_access_token(tenant_id: int = 1, customer_id: str = None) -> str:
     """
     Get valid access token, refreshing if necessary
     """
     creds = fetch_query(
-        "SELECT access_token, refresh_token, token_expires_at FROM jobber_credentials WHERE tenant_id = %s",
-        (tenant_id,)
+        "SELECT access_token, refresh_token, token_expires_at FROM jobber_credentials WHERE tenant_id = %s AND customer_id = %s",
+        (tenant_id, customer_id)
     )
 
     if not creds:
@@ -207,9 +207,9 @@ def get_jobber_access_token(tenant_id: int = 1) -> str:
             execute_query(
                 """UPDATE jobber_credentials
                    SET access_token = %s, refresh_token = %s, token_expires_at = %s, updated_at = NOW()
-                   WHERE tenant_id = %s""",
+                   WHERE tenant_id = %s AND customer_id = %s""",
                 (tokens["access_token"], tokens.get("refresh_token", cred["refresh_token"]),
-                 new_expires_at, tenant_id)
+                 new_expires_at, tenant_id, customer_id)
             )
 
             return tokens["access_token"]
@@ -222,11 +222,11 @@ def get_jobber_access_token(tenant_id: int = 1) -> str:
 
 # ==================== GRAPHQL QUERIES ====================
 
-def execute_jobber_query(query: str, variables: dict = None, tenant_id: int = 1) -> dict:
+def execute_jobber_query(query: str, variables: dict = None, tenant_id: int = 1, customer_id: str = None) -> dict:
     """
     Execute a GraphQL query against Jobber API
     """
-    access_token = get_jobber_access_token(tenant_id)
+    access_token = get_jobber_access_token(tenant_id, customer_id)
 
     headers = {
         "Authorization": f"Bearer {access_token}",
@@ -256,14 +256,14 @@ def execute_jobber_query(query: str, variables: dict = None, tenant_id: int = 1)
 # ==================== DATA SYNC ====================
 
 @router.get("/status")
-def get_jobber_status(current_user: dict = Depends(get_current_user)):
+def get_jobber_status(current_user: dict = Depends(get_current_user), customer_id: str = Depends(get_customer_id)):
     """
     Get Jobber connection status and sync statistics
     """
     tenant_id = 1
 
     # Check if connected
-    creds = fetch_query("SELECT account_name, token_expires_at FROM jobber_credentials WHERE tenant_id = %s", (tenant_id,))
+    creds = fetch_query("SELECT account_name, token_expires_at FROM jobber_credentials WHERE tenant_id = %s AND customer_id = %s", (tenant_id, customer_id))
 
     if not creds:
         return {
@@ -279,24 +279,24 @@ def get_jobber_status(current_user: dict = Depends(get_current_user)):
     last_sync = fetch_query(
         """SELECT sync_type, status, completed_at, items_created, items_updated
            FROM jobber_sync_logs
-           WHERE tenant_id = %s AND status = 'completed'
+           WHERE tenant_id = %s AND customer_id = %s AND status = 'completed'
            ORDER BY completed_at DESC LIMIT 1""",
-        (tenant_id,)
+        (tenant_id, customer_id)
     )
 
     total_clients = fetch_query(
-        "SELECT COUNT(*) as count FROM jobber_client_mapping WHERE tenant_id = %s",
-        (tenant_id,)
+        "SELECT COUNT(*) as count FROM jobber_client_mapping WHERE tenant_id = %s AND customer_id = %s",
+        (tenant_id, customer_id)
     )
 
     total_properties = fetch_query(
-        "SELECT COUNT(*) as count FROM jobber_property_mapping WHERE tenant_id = %s",
-        (tenant_id,)
+        "SELECT COUNT(*) as count FROM jobber_property_mapping WHERE tenant_id = %s AND customer_id = %s",
+        (tenant_id, customer_id)
     )
 
     mapped_properties = fetch_query(
-        "SELECT COUNT(*) as count FROM jobber_property_mapping WHERE tenant_id = %s AND property_id IS NOT NULL",
-        (tenant_id,)
+        "SELECT COUNT(*) as count FROM jobber_property_mapping WHERE tenant_id = %s AND customer_id = %s AND property_id IS NOT NULL",
+        (tenant_id, customer_id)
     )
 
     return {

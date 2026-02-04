@@ -317,16 +317,17 @@ async def assign_users_to_route(
 @router.get("/routes/{route_id}/assigned-users/")
 async def get_route_assigned_users(
     route_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """Get users assigned to a route"""
     user_id = int(current_user["sub"])
 
     # Verify route ownership or assignment
     check_query = """
-        SELECT user_id FROM routes WHERE id = %s
+        SELECT user_id FROM routes WHERE id = %s AND customer_id = %s
     """
-    result = fetch_query(check_query, (route_id,))
+    result = fetch_query(check_query, (route_id, customer_id))
 
     if not result:
         raise HTTPException(status_code=404, detail="Route not found")
@@ -336,9 +337,9 @@ async def get_route_assigned_users(
         SELECT u.id, u.name, u.email, u.role
         FROM users u
         JOIN route_assignments ra ON u.id = ra.user_id
-        WHERE ra.route_id = %s
+        WHERE ra.route_id = %s AND u.customer_id = %s
     """
-    assigned_users = fetch_query(query, (route_id,))
+    assigned_users = fetch_query(query, (route_id, customer_id))
 
     return assigned_users if assigned_users else []
 
@@ -353,7 +354,8 @@ class RouteActivation(BaseModel):
 @router.post("/routes/complete-property/")
 async def complete_route_property(
     log_id: int,
-    current_user: dict = Depends(get_current_user)
+    current_user: dict = Depends(get_current_user),
+    customer_id: str = Depends(get_customer_id)
 ):
     """
     Mark a property in a route as complete
@@ -365,8 +367,8 @@ async def complete_route_property(
     log_entry = fetch_query(
         """SELECT id, property_id, user_id, winter_event_id, route_id, route_sequence, route_status
            FROM winter_ops_logs
-           WHERE id = %s""",
-        (log_id,)
+           WHERE id = %s AND customer_id = %s""",
+        (log_id, customer_id)
     )
 
     if not log_entry:
@@ -385,8 +387,8 @@ async def complete_route_property(
     execute_query(
         """UPDATE winter_ops_logs
            SET route_status = 'complete', status = 'closed', time_out = NOW()
-           WHERE id = %s""",
-        (log_id,)
+           WHERE id = %s AND customer_id = %s""",
+        (log_id, customer_id)
     )
 
     # Find next property in route
@@ -396,12 +398,13 @@ async def complete_route_property(
            WHERE route_id = %s
            AND winter_event_id = %s
            AND user_id = %s
+           AND customer_id = %s
            AND route_sequence > %s
            AND route_status = 'queued'
            ORDER BY route_sequence ASC
            LIMIT 1""",
         (log_entry["route_id"], log_entry["winter_event_id"],
-         log_entry["user_id"], log_entry["route_sequence"])
+         log_entry["user_id"], customer_id, log_entry["route_sequence"])
     )
 
     next_property_name = None
@@ -411,12 +414,12 @@ async def complete_route_property(
         execute_query(
             """UPDATE winter_ops_logs
                SET route_status = 'active', status = 'open', time_in = NOW()
-               WHERE id = %s""",
-            (next_property[0]["id"],)
+               WHERE id = %s AND customer_id = %s""",
+            (next_property[0]["id"], customer_id)
         )
 
         # Get property name
-        prop_info = fetch_query("SELECT name FROM locations WHERE id = %s", (next_property[0]["property_id"],))
+        prop_info = fetch_query("SELECT name FROM locations WHERE id = %s AND customer_id = %s", (next_property[0]["property_id"], customer_id))
         if prop_info:
             next_property_name = prop_info[0]["name"]
 
@@ -428,8 +431,8 @@ async def complete_route_property(
              SUM(CASE WHEN route_status = 'active' THEN 1 ELSE 0 END) as active,
              SUM(CASE WHEN route_status = 'queued' THEN 1 ELSE 0 END) as queued
            FROM winter_ops_logs
-           WHERE route_id = %s AND winter_event_id = %s AND user_id = %s""",
-        (log_entry["route_id"], log_entry["winter_event_id"], log_entry["user_id"])
+           WHERE route_id = %s AND winter_event_id = %s AND user_id = %s AND customer_id = %s""",
+        (log_entry["route_id"], log_entry["winter_event_id"], log_entry["user_id"], customer_id)
     )
 
     progress_info = progress[0] if progress else {"total": 0, "completed": 0, "active": 0, "queued": 0}

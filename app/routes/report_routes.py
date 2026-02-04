@@ -507,7 +507,7 @@ def export_billing_report(filters: ReportFilters, customer_id: str = Depends(get
     )
 
 @router.post("/export/winter-logs/")
-def export_winter_logs(filters: ReportFilters):
+def export_winter_logs(filters: ReportFilters, customer_id: str = Depends(get_customer_id)):
     """
     Export winter operations logs in Excel format
     Comprehensive export with all log details for the ViewWinterLogs page
@@ -518,8 +518,8 @@ def export_winter_logs(filters: ReportFilters):
     contractor_name = filters.contractor_name
     equipment = filters.equipment
 
-    where_parts = []
-    params = []
+    where_parts = ["w.customer_id = %s"]
+    params = [customer_id]
 
     if start and end:
         where_parts.append("DATE(w.time_in) BETWEEN %s AND %s")
@@ -556,11 +556,13 @@ def export_winter_logs(filters: ReportFilters):
             w.notes,
             we.event_name as winter_event_name
         FROM winter_ops_logs w
-        JOIN locations l ON w.property_id = l.id
-        LEFT JOIN winter_events we ON w.winter_event_id = we.id
+        JOIN locations l ON w.property_id = l.id AND l.customer_id = %s
+        LEFT JOIN winter_events we ON w.winter_event_id = we.id AND we.customer_id = %s
         {where_clause}
         ORDER BY w.time_in DESC
     """
+    params.insert(1, customer_id)  # Add customer_id for locations JOIN
+    params.insert(2, customer_id)  # Add customer_id for winter_events JOIN
 
     logs = fetch_query(query, params if params else None)
 
@@ -648,7 +650,7 @@ def export_winter_logs(filters: ReportFilters):
     )
 
 @router.post("/export/field-service-reports/")
-def export_field_service_reports(filters: ReportFilters):
+def export_field_service_reports(filters: ReportFilters, customer_id: str = Depends(get_customer_id)):
     """
     Export field service reports grouped by Property + Equipment
     One sheet per property-equipment combination with weather data
@@ -661,8 +663,8 @@ def export_field_service_reports(filters: ReportFilters):
     property_id = filters.property_id
     winter_event_id = filters.winter_event_id
 
-    where_parts = []
-    params = []
+    where_parts = ["w.customer_id = %s"]
+    params = [customer_id]
 
     # Priority: winter event ID overrides date range
     if winter_event_id:
@@ -681,8 +683,8 @@ def export_field_service_reports(filters: ReportFilters):
     # Get event name if filtering by event
     event_name = None
     if winter_event_id:
-        event_query = "SELECT event_name FROM winter_events WHERE id = %s"
-        event_result = fetch_query(event_query, (winter_event_id,))
+        event_query = "SELECT event_name FROM winter_events WHERE id = %s AND customer_id = %s"
+        event_result = fetch_query(event_query, (winter_event_id, customer_id))
         if event_result and len(event_result) > 0:
             event_name = event_result[0]['event_name']
 
@@ -703,10 +705,11 @@ def export_field_service_reports(filters: ReportFilters):
             w.worker_name,
             w.notes
         FROM winter_ops_logs w
-        JOIN locations l ON w.property_id = l.id
+        JOIN locations l ON w.property_id = l.id AND l.customer_id = %s
         {where_clause}
         ORDER BY l.name, w.equipment, w.time_in
     """
+    params.insert(1, customer_id)  # Add customer_id for the JOIN condition
 
     logs = fetch_query(query, params if params else None)
 

@@ -663,24 +663,24 @@ Please assign all properties to crews, ensuring proper crew type distribution.""
             # Check if assignment already exists
             existing = fetch_query(
                 """SELECT id FROM property_contractors
-                   WHERE property_id = %s AND contractor_id = %s AND acceptance_status = 'pending'""",
-                (assignment['property_id'], assignment['contractor_id'])
+                   WHERE property_id = %s AND contractor_id = %s AND acceptance_status = 'pending' AND customer_id = %s""",
+                (assignment['property_id'], assignment['contractor_id'], customer_id)
             )
 
             if not existing:
                 # Create new assignment
                 execute_query(
                     """INSERT INTO property_contractors
-                       (property_id, contractor_id, acceptance_status, assigned_date, notes)
-                       VALUES (%s, %s, 'pending', NOW(), %s)""",
+                       (property_id, contractor_id, acceptance_status, assigned_date, notes, customer_id)
+                       VALUES (%s, %s, 'pending', NOW(), %s, %s)""",
                     (assignment['property_id'], assignment['contractor_id'],
-                     f"AI-assigned for crew type: {assignment['crew_type']}")
+                     f"AI-assigned for crew type: {assignment['crew_type']}", customer_id)
                 )
 
                 # Get contractor phone for SMS notification
                 contractor = fetch_query(
-                    "SELECT phone_number FROM users WHERE id = %s",
-                    (assignment['contractor_id'],)
+                    "SELECT phone_number FROM users WHERE id = %s AND customer_id = %s",
+                    (assignment['contractor_id'], customer_id)
                 )
 
                 if contractor and contractor[0].get('phone_number'):
@@ -700,13 +700,13 @@ Please assign all properties to crews, ensuring proper crew type distribution.""
         for notif in sms_notifications:
             try:
                 property_info = fetch_query(
-                    "SELECT name, address FROM locations WHERE id = %s",
-                    (notif['property_id'],)
+                    "SELECT name, address FROM locations WHERE id = %s AND customer_id = %s",
+                    (notif['property_id'], customer_id)
                 )
 
                 contractor_info = fetch_query(
-                    "SELECT name, default_equipment FROM users WHERE id = %s",
-                    (notif['contractor_id'],)
+                    "SELECT name, default_equipment FROM users WHERE id = %s AND customer_id = %s",
+                    (notif['contractor_id'], customer_id)
                 )
 
                 if property_info and contractor_info:

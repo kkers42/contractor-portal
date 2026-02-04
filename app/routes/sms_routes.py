@@ -674,18 +674,34 @@ async def process_sms_intent(conversation: dict, interpretation: dict, message_b
             )
 
         # Mark user as unavailable for auto-assignment
-        execute_query(
-            "UPDATE users SET available_for_assignment = FALSE WHERE id = %s",
-            (user_id,)
-        )
+        if customer_id:
+            execute_query(
+                "UPDATE users SET available_for_assignment = FALSE WHERE id = %s AND customer_id = %s",
+                (user_id, customer_id)
+            )
+        else:
+            execute_query(
+                "UPDATE users SET available_for_assignment = FALSE WHERE id = %s",
+                (user_id,)
+            )
 
         # Close any open tickets
-        execute_query(
-            """UPDATE winter_ops_logs
-               SET status = 'closed', time_out = NOW(), notes = CONCAT(COALESCE(notes, ''), '\n[User went home - auto-closed]')
-               WHERE user_id = %s AND status = 'open'""",
-            (user_id,)
-        )
+        if customer_id:
+            execute_query(
+                """UPDATE winter_ops_logs wol
+                   JOIN locations l ON wol.property_id = l.id
+                   SET wol.status = 'closed', wol.time_out = NOW(),
+                       wol.notes = CONCAT(COALESCE(wol.notes, ''), '\n[User went home - auto-closed]')
+                   WHERE wol.user_id = %s AND wol.status = 'open' AND l.customer_id = %s""",
+                (user_id, customer_id)
+            )
+        else:
+            execute_query(
+                """UPDATE winter_ops_logs
+                   SET status = 'closed', time_out = NOW(), notes = CONCAT(COALESCE(notes, ''), '\n[User went home - auto-closed]')
+                   WHERE user_id = %s AND status = 'open'""",
+                (user_id,)
+            )
 
         # Reset conversation
         execute_query(
@@ -738,17 +754,24 @@ def create_ticket_from_sms(user_id: int, user_name: str, property_id: int):
     # Snap time to 15 minutes
     time_in = snap_to_15_minutes(time_in_raw)
 
-    # Get user's default equipment
+    # Get user's default equipment and customer_id
     user_info = fetch_query(
-        "SELECT default_equipment FROM users WHERE id = %s",
+        "SELECT default_equipment, customer_id FROM users WHERE id = %s",
         (user_id,)
     )
     default_equipment = user_info[0]['default_equipment'] if user_info and user_info[0].get('default_equipment') else 'Not specified'
+    customer_id = user_info[0]['customer_id'] if user_info else None
 
     # Get active winter event
-    active_event = fetch_query(
-        "SELECT id FROM winter_events WHERE status = 'active' LIMIT 1"
-    )
+    if customer_id:
+        active_event = fetch_query(
+            "SELECT id FROM winter_events WHERE status = 'active' AND customer_id = %s LIMIT 1",
+            (customer_id,)
+        )
+    else:
+        active_event = fetch_query(
+            "SELECT id FROM winter_events WHERE status = 'active' LIMIT 1"
+        )
     winter_event_id = active_event[0]['id'] if active_event else None
 
     execute_query(
@@ -762,10 +785,19 @@ def create_ticket_from_sms(user_id: int, user_name: str, property_id: int):
     )
 
     # Get the created ticket ID
-    ticket = fetch_query(
-        "SELECT id FROM winter_ops_logs WHERE user_id = %s ORDER BY id DESC LIMIT 1",
-        (user_id,)
-    )
+    if customer_id:
+        ticket = fetch_query(
+            """SELECT wol.id FROM winter_ops_logs wol
+               JOIN locations l ON wol.property_id = l.id
+               WHERE wol.user_id = %s AND l.customer_id = %s
+               ORDER BY wol.id DESC LIMIT 1""",
+            (user_id, customer_id)
+        )
+    else:
+        ticket = fetch_query(
+            "SELECT id FROM winter_ops_logs WHERE user_id = %s ORDER BY id DESC LIMIT 1",
+            (user_id,)
+        )
 
     return ticket[0]['id'] if ticket else None
 
@@ -783,10 +815,12 @@ async def notify_assignment(
     if current_user['role'] not in ['Admin', 'Manager']:
         raise HTTPException(status_code=403, detail="Admin/Manager only")
 
+    customer_id = get_customer_id(current_user)
+
     # Get contractor phone number and default equipment
     contractor = fetch_query(
-        "SELECT phone_number, name, default_equipment FROM users WHERE id = %s",
-        (contractor_id,)
+        "SELECT phone_number, name, default_equipment FROM users WHERE id = %s AND customer_id = %s",
+        (contractor_id, customer_id)
     )
 
     if not contractor or not contractor[0]['phone_number']:
@@ -794,8 +828,8 @@ async def notify_assignment(
 
     # Get property info
     property_info = fetch_query(
-        "SELECT name, address FROM locations WHERE id = %s",
-        (property_id,)
+        "SELECT name, address FROM locations WHERE id = %s AND customer_id = %s",
+        (property_id, customer_id)
     )
 
     if not property_info:
